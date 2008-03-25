@@ -1,0 +1,1814 @@
+: # -*-Perl-*-
+eval 'exec perl -wS "$0" ${1+"$@"}'
+       if 0;
+
+##
+## Configure a SoftSDV workload
+##
+
+##
+## A few environment variables can override configuration in the benchmark
+## directory.  This permits debugging new versions, changing features, etc.
+## before updating benchmark scripts...
+##
+## SOFTSDV_SETUP         -- enable creation of setup_softsdv.sh script.
+##                          By default, no setup scripts are created in
+##                          order to make it harder to overwrite the global
+##                          checkpoints.  If SOFTSDV_SETUP's value is ICOUNT
+##                          then instruction counts will be used to find
+##                          regions (if applicable).  Otherwise, NOP marker
+##                          instructions will be used.
+##
+## SOFTSDV_VERSION       -- override softsdv_version
+##
+## SOFTSDV_LOCAL_SAVE    -- force saved checkpoints to be stored in the
+##                          local (checked out) benchmark directory's
+##                          checkpoints directory.
+##
+## SOFTSDV_FORCE_ICOUNT  -- force the simulation to do icount i
+##
+## SOFTSDV_FORCE_LCOUNT  -- force the simulation to do loop trip count i
+##
+## SOFTSDV_FORCE_WARM    -- force warm-up of icount or loops i
+##
+## SOFTSDV_GUEST_ARGS    -- additional arguments to be passed to the guest
+##                          program invoked by SoftSDV.  These arguments
+##                          replace the string XXGUESTARGSXX in the text
+##                          of a workload's arguments.  SOFTSDV_GUEST_ARGS
+##                          has no effect if XXGUESTARGSXX is not in the
+##                          base argument string.
+##
+
+use strict;
+use Getopt::Long;
+use File::Basename;
+
+
+#------------------------------------------------------------------------------
+#
+#   Parse arguments
+#
+#------------------------------------------------------------------------------
+
+##
+## Parse command line options now because some of the options
+## will affect the way the workload tables are constructed.
+##
+my $arch = 'ipf';
+my $cmdVersion = '';
+my $doBoot = 0;
+my $endMarker;
+my $exactFP = 0;
+my $findSimPts = 0;
+my $genCheckPoint = 0;
+my $group = '';
+my $loopMarker = undef;
+our $ncpus = 1;              # global -- may be used in benchmark .config files
+my $os = 'Linux';
+my $region = 0;
+my $siminstrs = '250M';
+my $simLoopTrips = undef;
+my $startCnt = 1;
+my $startMarker;
+my $warmChkpt = undef;
+my $warmRun = undef;
+our $workload = '';          # global -- may be used in benchmark .config files
+my $workloaddir = '';
+my $queryregions = 0;
+
+our $rc_arg_run = '';        # global -- may be used in benchmark .config files
+our $rc_arg_setup = '';      # global -- may be used in benchmark .config files
+my $rc_arg_simpoint = '';
+
+my $total_memory = undef;
+
+my $help = 0;
+
+sub Usage();
+sub ErrorExit($);
+sub ScaleInt($);
+
+if (! GetOptions('arch=s' => \$arch,
+                 'boot!' => \$doBoot,
+                 'endmarker=i' => \$endMarker,
+                 'exactfp!' => \$exactFP,
+                 'findsimpts=s' => \$findSimPts, ## String because may be scaled
+                 'gencheckpoint!' => \$genCheckPoint,
+                 'group=s' => \$group,           ## deprecated
+                 'help!' => \$help,
+                 'loopmarker=i' => \$loopMarker,
+                 'memory_mb=i' => \$total_memory,
+                 'ncpus=i' => \$ncpus,
+                 'os=s' => \$os,
+                 'queryregions!' => \$queryregions,
+                 'region=i' => \$region,
+                 'siminstrs=s' => \$siminstrs,
+                 'simlooptrips=i' => \$simLoopTrips,
+                 'startcnt=i' => \$startCnt,
+                 'startmarker=i' => \$startMarker,
+                 'version=s' => \$cmdVersion,
+                 'warmcheckpoint=s' => \$warmChkpt,  ## String because may be scaled
+                 'warmrun=s' => \$warmRun,       ## String because may be scaled
+                 'workload=s' => \$workload,
+                 'workloaddir=s' => \$workloaddir,
+                ))
+{
+    Usage();
+}
+
+if ($help) {
+    system "perldoc $0";
+    exit(0);
+}
+
+if (($arch ne 'x86') && ($arch ne 'ipf')) {
+    print STDERR "Illegal --arch: ${arch}\n";
+    exit(1);
+}
+
+if (($queryregions == 0) && ($#ARGV != 1))
+{
+    Usage();
+}
+
+#
+# Scale some arguments that accept letter suffixes
+#
+$siminstrs = ScaleInt($siminstrs);
+$findSimPts = ScaleInt($findSimPts);
+$warmChkpt = ScaleInt($warmChkpt);
+if (defined($ENV{'SOFTSDV_FORCE_WARM'})) {
+    $warmRun = $ENV{'SOFTSDV_FORCE_WARM'};
+}
+if (defined($warmRun) && ($warmRun ne 'F')) {
+    $warmRun = ScaleInt($warmRun);
+}
+
+
+my $srcdir = $ARGV[0];
+my $dstdir = $ARGV[1];
+
+#
+# AWB_BENCHMARKS_ROOT is the root of the benchmarks directory tree.
+#
+my $benchmark_root = `awb-resolver --config=benchmarkdir`;
+chomp($benchmark_root);
+ErrorExit("Can't find benchmark root") if ($benchmark_root eq '');
+
+# Make sure BENCHMARKDIR was repliaced in the workload path
+$workloaddir =~ s!^BENCHMARKDIR!${benchmark_root}!;
+
+my $modeldir = '';
+if (defined($ENV{'ASIM_CONFIG_MODEL'}))
+{
+    $modeldir = `dirname $ENV{'ASIM_CONFIG_MODEL'}`;
+    chomp($modeldir);
+}
+
+my $softsdv_base_bin_path = '';
+my $softsdv_base_lib_path = '';
+my $softsdv_local_bin_path = '';
+my $softsdv_local_lib_path = '';
+my $asim_softsdv_args = '';
+my $asim_softsdv_workload_args = '';
+my $hdb_args = '';
+my $base_savename = '';
+my $new_savename = '';
+my $workload_name = '';
+my $run_loads_image = 0;
+my $warmupSamples = 0;
+my $warmupRunLen = 0;
+my $warmupInterval = 0;
+our $workload_args = undef;
+our $workload_guest_args = undef;
+our $workload_start_address = 0; # global -- may be set in benchmark .confing files
+our @workload_regions = ();      # global -- may be set in benchmark .confing files
+our @workload_ofiles = ();       # global -- may be set in benchmark .confing files
+our $workload_pin_total_instrs = 0; # global -- may be set in benchmark .confing files
+my $region_weight = '';
+
+#------------------------------------------------------------------------------
+#
+#   Workload tables
+#
+#------------------------------------------------------------------------------
+
+##
+## Define base configurations for simulated machines.
+##
+
+#
+# This older Linux configuration has a lot of memory since there was no
+# swap disk. Later configurations add a swap disk so we don't need to
+# worry about running out of memory.
+#
+my %linux_ipf_machines_v1 =
+#    CPUs   Nodes  CPUs/Node  Memory (MB)
+    (  1 => [ 1,       1,       4096 ],
+       2 => [ 1,       2,       4096 ],
+       4 => [ 1,       4,       4096 ],
+       ## Hack in SoftSDV config script for 2/2/1/1 CPUs - set 6 CPUs
+       6 => [ 4,       6,       4096 ],
+       ## Hack in SoftSDV config script for 2/2/2/1 CPUs - set 7 CPUs
+       7 => [ 4,       7,       4096 ],
+       8 => [ 4,       2,       4096 ],
+      12 => [ 4,       3,       4096 ],
+      16 => [ 4,       4,       4096 ]
+    );
+
+my %linux_ipf_machines_v2 =
+#    CPUs   Nodes  CPUs/Node  Memory (MB)
+    (  1 => [ 1,       1,       2048 ],
+       2 => [ 1,       2,       2048 ],
+       4 => [ 1,       4,       2048 ],
+       ## Hack in SoftSDV config script for 2/2/1/1 CPUs - set 6 CPUs
+       6 => [ 4,       6,       2048 ],
+       ## Hack in SoftSDV config script for 2/2/2/1 CPUs - set 7 CPUs
+       7 => [ 4,       7,       2048 ],
+       8 => [ 4,       2,       2048 ],
+      12 => [ 4,       3,       2048 ],
+      16 => [ 4,       4,       2048 ]
+    );
+
+my %linux_x86_machines =
+#    CPUs   Nodes  CPUs/Node  Memory (MB)
+    (  1 => [ 1,       1,       8192 ],
+       2 => [ 1,       2,       8192 ],
+       4 => [ 1,       4,       8192 ],
+       8 => [ 1,       8,       8192 ],
+      16 => [ 1,      16,       8192 ],
+      32 => [ 1,      32,       8192 ],
+      64 => [ 1,      64,       8192 ],
+     128 => [ 1,     128,       8192 ]
+    );
+
+my %windows_ipf_machines =
+#    CPUs   Nodes  CPUs/Node  Memory (MB)
+    (  1 => [ 1,       1,       512 ],
+       4 => [ 1,       4,       1024 ],
+       ## Hack in SoftSDV config script for 2/2/1/1 CPUs - set 6 CPUs
+       6 => [ 4,       6,       2048 ],
+       ## Hack in SoftSDV config script for 2/2/2/1 CPUs - set 7 CPUs
+       7 => [ 4,       7,       4096 ],
+       8 => [ 4,       2,       4096 ],
+      12 => [ 4,       3,       4096 ],
+      16 => [ 4,       4,       4096 ]
+    );
+
+my %windows_x86_machines =
+#    CPUs   Nodes  CPUs/Node  Memory (MB)
+    (  1 => [ 1,       1,       4096 ],
+       2 => [ 1,       2,       4096 ],
+       4 => [ 1,       4,       4096 ],
+       8 => [ 1,       8,       4096 ],
+      16 => [ 1,       16,      4096 ]
+    );
+
+                      
+##
+## These configurations run Oracle/TPCC:
+##
+
+my %linux_ipf_machines_8gb =
+#    CPUs   Nodes  CPUs/Node  Memory (MB)
+    (  1 => [ 1,       1,       8192 ],
+       2 => [ 1,       2,       8192 ],
+       4 => [ 1,       4,       8192 ],
+       ## Hack in SoftSDV config script for 5, 6 or 7 CPUs
+       5 => [ 4,       5,       8192 ],
+       6 => [ 4,       6,       8192 ],
+       7 => [ 4,       7,       8192 ],
+       8 => [ 4,       2,       8192 ],
+      16 => [ 4,       4,       8192 ],
+    );
+
+
+##
+## Pick a machine configuration from the machines above given an OS name,
+## a machine architecture and a SoftSDV version.
+##
+sub pick_machine_config($$$)
+{
+    my ($name, $arch, $version) = @_;
+
+    if ($name eq 'Linux' || $name eq 'Linux32' || $name eq 'Linux64') {
+        if ($arch eq 'x86') {
+            if ($name eq 'Linux') {
+                ## Use Linux32 if just Linux is specified
+                $os = 'Linux64';
+            }
+            return \%linux_x86_machines;
+        }
+
+        if ($arch eq 'ipf') {
+            if ($version =~ /^v2003/) {
+                return \%linux_ipf_machines_v1;
+            }
+
+            return \%linux_ipf_machines_v2;
+        }
+
+        die "pick_machine_config: Unexpected architecture (${arch})";
+    }
+
+    if ($name eq 'BigLinux') {
+        return \%linux_ipf_machines_8gb;
+    }
+
+    if ($name eq 'BigLinux3') {
+        return \%linux_ipf_machines_8gb;
+    }
+
+    if ($name =~ '^Windows') {
+        if($arch eq 'x86') {
+           return \%windows_x86_machines; 
+        }
+        if ($arch eq 'ipf') {
+           return \%windows_ipf_machines;
+        }
+        die "pick_machine_config: Unexpected architecture (${arch})";
+    }
+
+    die "pick_machine_config: Unexpected name (${name})";
+}
+
+
+##
+## SoftSDV names for the current instance of the workload changes often.  This
+## table allows mapping from generic OS names to specific instances.  Only add
+## an entry here if the name is different than the index.
+##
+my %softsdv_operating_system_name_remap =
+    ( 'Windows' => 'ASIM_Windows',
+      'Linux' => 'ASIM_Linux',
+      'Linux32' => 'ASIM_Linux32',
+      'Linux64' => 'ASIM_Linux64',
+      'BigLinux' => 'Linux_AS',
+      'BigLinux3' => 'Linux_AS_3',
+      'Windows_Datacenter' => 'ASIM_Windows_Datacenter',
+      'Windows_Server' => 'ASIM_Windows_Server',
+      'Windows_Server_64' => 'ASIM_Windows_Server_64',
+      'Windows32_Desk' => 'ASIM_Windows_XP_Desk_32',
+    );
+
+##
+## These tables describe the process context data structure for each OS,
+## indexed by the SoftSDV version.  They are offsets for interesting
+## values in the kernel's task_struct (to which AR6 points).  SoftSDV
+## doesn't determine the offset on its own.
+##
+##
+## NOTE:  An easy way to find these offsets (at least in recent versions)
+## is to look at the disassembly for oom_kill_task in mm/oom_kill.c in
+## the Linux kernel.
+##
+
+##  ******************************************************
+##  As of SoftSDV v2004... this table is no longer needed.
+##  ******************************************************
+
+my %context_info =
+    ( 'Linux' =>
+      #                     pid,  comm,     timer vector          idle loop tag
+      { 'v20030312_0a' => [  204, 1402, '0xe000000004423ca0', '0xe000000004415170' ],    ## Linux AS 2.1
+        'v20030921_0'  => [  268, 1828, '0xe000000004432740', '0xe000000004415fb1' ],    ## Linux AS 3.0
+        'v20030921_0a' => [  268, 1828, '0xe000000004432740', '0xe000000004415fb1' ],    ## Linux AS 3.0
+        'v20030921_0b' => [  268, 1828, '0xe000000004432740', '0xe000000004415fb1' ],    ## Linux AS 3.0
+      },
+
+      'BigLinux' =>
+      #                     pid,  comm      timer vector          idle loop tag
+      { 'v20030921_0'  => [  204, 1402, '0xe000000004423ca0', '0xe000000004415170' ],    ## Linux AS 2.1
+        'v20030921_0a' => [  204, 1402, '0xe000000004423ca0', '0xe000000004415170' ],    ## Linux AS 2.1
+        'v20030921_0b' => [  204, 1402, '0xe000000004423ca0', '0xe000000004415170' ],    ## Linux AS 2.1
+      }
+    );
+
+
+if ($queryregions == 0) {
+    print "Architecture is ${arch}\n";
+}
+die "Illegal architecture!" if ($arch ne 'x86' && $arch ne 'ipf');
+
+
+##
+## SoftSDV talks about memory sizes in MB and GB.  Everything >= 1 GB must
+## be specified as GB.
+##
+sub MemorySizeString($)
+{
+    my ($size) = @_;
+
+    if ($size >= 1024)
+    {
+        return $size / 1024 . "G";
+    }
+    else
+    {
+        return $size . "M";
+    }
+}
+
+
+##
+## Use as a sorting function if some of the values being sorted are strings
+#  and some are numbers.  When two numbers are compared they are sorted
+## numerically.  When either of the values being compared is alphabetic
+## they are compared as strings.
+##
+sub AlphaOrNumericSort
+{
+    if (($a =~ /^[0-9]*$/) && ($b =~ /^[0-9]*$/))
+    {
+        ## Both are numbers
+        return $a <=> $b;
+    }
+    else
+    {
+        return $a cmp $b;
+    }
+}
+
+
+sub Usage()
+{
+    my $prog = basename($0);
+    print STDERR "$prog: Illegal argument, try '$prog --help'\n";
+    exit(1);
+}
+
+sub ErrorExit($)
+{
+    print @_;
+    print "\n";
+    exit(1);
+}
+
+##
+## ScaleInt -- scale an integer with a suffix at the end.  E.g. M multiplies
+##     my 1 million.
+##
+sub ScaleInt($)
+{
+    my ($n) = @_;
+
+    return undef if (! defined($n));
+
+    my $orig = $n;
+
+    if ($n =~ /[A-Z]$/) {
+        my $scale = $n;
+        $scale =~ s/.*([A-Z])$/$1/;
+        $n =~ s/(.*)[A-Z]$/$1/;
+        if ($scale eq 'M') {
+            $n *= 1000000;
+        }
+        elsif ($scale eq 'B') {
+            $n *= 1000000000;
+        }
+        else {
+            die("Illegal integer scale: ${scale} on ${orig}");
+        }
+    }
+    else {
+        # Make sure it is an integer
+        $n = $n * 1;
+    }
+
+    return $n;
+}
+
+##
+## Look up an environment variable and return its value.  If the variable
+## is undefined, return ''.
+##
+sub SafeEnvLookup($)
+{
+    my ($envname) = @_;
+
+    if (defined($ENV{$envname}))
+    {
+        return $ENV{$envname};
+    }
+
+    return '';
+}
+
+##
+## Copy file from src to dst, substituting a bunch of XX<foo>XX strings for
+## values computed in this setup script.  This allows for generic script
+## files that are made specific when the workload is set up.
+##
+## There are a number of global variables used in this routine.  The list
+## of changes is too long to pass each one as an argument.  I'm sure this
+## could be done better.
+##
+sub SubstCopyFile($$)
+{
+    my ($src, $dst) = @_;
+
+    unless (open(INPUT, '<' . $src))
+    {
+        print STDERR "Can't open $src: $!\n";
+        return;
+    }
+
+    unless (open(OUTPUT, '>' . $dst))
+    {
+        print STDERR "Can't open $dst: $!\n";
+        return;
+    }
+
+    local $_;
+    while (<INPUT>)
+    {
+        s/XXROOTXX/${benchmark_root}/g;
+        s/XXARCHXX/${arch}/g;
+        s/XXBASELIBXX/${softsdv_base_lib_path}/g;
+        s/XXLOCALLIBXX/${softsdv_local_lib_path}/g;
+        s/XXBASEBINXX/${softsdv_base_bin_path}/g;
+        s/XXLOCALBINXX/${softsdv_local_bin_path}/g;
+        s/XXASIMSDVARGSXX/${asim_softsdv_args}/g;
+        s/XXASIMSDVWRKARGSXX/${asim_softsdv_workload_args}/g;
+        s/XXHDBARGSXX/${hdb_args}/g;
+        s/XXBASESAVENAMEXX/${base_savename}/g;
+        s/XXSAVENAMEXX/${new_savename}/g;
+        s/XXMODELDIRXX/${modeldir}/g;
+        s/XXASIMBMNAMEXX/${workload_name}/g;
+        s/XXSTARTCNTXX/${startCnt}/g;
+        s/XXSIMINSTRSXX/${siminstrs}/g;
+        s/XXPROGRAMSTARTADDRESSXX/${workload_start_address}/g;
+        s/XXREGIONWEIGHTXX/${region_weight}/g;
+        s/XXFINDSIMPOINTSXX/${findSimPts}/g;
+        s/XXRUNLOADSIMAGEXX/${run_loads_image}/g;
+        s/XXBOOTXX/${doBoot}/g;
+        s/XXNCPUSXX/${ncpus}/g;
+        s/XXRCARG_RUNXX/${rc_arg_run}/g;
+        s/XXRCARG_SETUPXX/${rc_arg_setup}/g;
+        s/XXRCARG_SIMPOINTXX/${rc_arg_simpoint}/g;
+
+        ## Obsolete as of v2004... (replaced by Perl scripting)
+        s/XXSSBINSTRSXX/${siminstrs}/g;
+        s/XXSSBSTARTCNTXX/${startCnt}/g;
+        s/XXPREDICTED_INSTR_COUNTXX/0/g;
+        s/XXWARMUPINTERVALXX/${warmupInterval}/g;
+        s/XXWARMUPSMPLSXX/${warmupSamples}/g;
+        print OUTPUT $_;
+    }
+
+    close(INPUT);
+    close(OUTPUT);
+}
+
+#------------------------------------------------------------------------------
+#
+#   Load information about SimPoints
+#
+#------------------------------------------------------------------------------
+
+sub LoadPPFile($)
+{
+    my $fname = shift;
+    my $regionInstrs = 0;
+    my $sampleInstrs = 0;
+    my $warmupRegions = 0;
+
+    if (@workload_regions) {
+        printf STDERR "LoadPPFile: regions already defined!\n";
+        exit(1);
+    }
+
+    open(PP, "< $fname") or die("Failed to open simpoint file: $fname");
+    while (<PP>) {
+        chop $_;
+
+        if (/^I/) {
+            $workload_pin_total_instrs = $_;
+            $workload_pin_total_instrs =~ s/I *//;
+        }
+        if (/^L/) {
+            $regionInstrs = $_;
+            $regionInstrs =~ s/L *//;
+        }
+        if (/^W/) {
+            $warmupRegions = $_;
+            $warmupRegions =~ s/W *//;
+        }
+        if (/^X/) {
+            $sampleInstrs = $_;
+            $sampleInstrs =~ s/X *//;
+        }
+        if (/^R/) {
+            my @rInfo = split(/\s+/, $_);
+            my $i = $#workload_regions + 1;
+            $workload_regions[$i][0] = $rInfo[1] * $regionInstrs;
+            $workload_regions[$i][1] = $regionInstrs;
+            $workload_regions[$i][2] = $rInfo[2] * 100.0;
+            $workload_regions[$i][3] = $warmupRegions * $regionInstrs;
+            $workload_regions[$i][4] = $sampleInstrs;
+        }
+    }
+
+    close(PP);
+}
+
+#------------------------------------------------------------------------------
+#
+#   Main code
+#
+#------------------------------------------------------------------------------
+
+#
+# SYSTOKEN is the system dependent name (e.g. i386_linux24)
+#
+ErrorExit("No SYSTOKEN environment variable defined") if (! defined($ENV{'SYSTOKEN'}));
+my $systoken = $ENV{'SYSTOKEN'};
+
+#
+# Figure out the SoftSDV version either from the environment variable
+# or command line arguments.
+#
+my $softsdv_version;
+if ($arch eq 'x86') {
+    $softsdv_version = 'v20050601_0';
+}
+else {
+    if ($group eq 'UserMode') {
+        $softsdv_version = 'v20040920_0';
+    }
+    else {
+        $softsdv_version = 'v20040920_0';
+    }
+}
+
+$softsdv_version = $cmdVersion if ($cmdVersion ne '');
+
+if (defined($ENV{'SOFTSDV_VERSION'}))
+{
+    $softsdv_version = $ENV{'SOFTSDV_VERSION'};
+}
+ErrorExit("No SoftSDV version defined") if ($softsdv_version eq '');
+
+#
+# Make sure group and workload are valid
+#
+die ("Must specify --group") if ($group eq '');
+die ("Must specify --workload") if ($workload eq '');
+
+#
+# Compute some event counts early since they are used to modify scripts
+#
+
+#
+# SimPoints and warm-up --
+#    When SimPoints are requested a warm-up region is automatically
+#    defined.  The region may be overridden on the command line with
+#    --warmcheckpoint and --warmrun
+# 
+if ($findSimPts) {
+    $siminstrs = $findSimPts;
+
+    if (! defined($warmChkpt)) {
+        if (! defined($warmRun)) {
+            # No warm-up run region requested.  Run 500 million total
+            # instructions across all CPUs.
+            $warmRun = 500000000 / $ncpus;
+        }
+        elsif ($warmRun eq 'F') {
+            # User wants to use the whole warm-up region
+            $warmRun = undef;
+        }
+
+        # No warm-up region requested.  Leave a region of 2 billion total
+        # instructions across all CPUs.
+        $warmChkpt = 2000000000 / $ncpus;
+        # If --warmrun was specified and it is longer than the checkpoint
+        # region, make the checkpoint region bigger.
+        if (defined($warmRun) && ($warmRun > $warmChkpt)) {
+            $warmChkpt = $warmRun;
+        }
+    }
+}
+
+if (defined($warmRun) && ($warmRun eq 'F')) {
+    # User wants to use the whole warm-up region
+    $warmRun = undef;
+}
+if (! defined($warmChkpt)) {
+    $warmChkpt = 0;
+}
+
+if (defined($ENV{'SOFTSDV_FORCE_ICOUNT'}))
+{
+    $siminstrs = ($ENV{'SOFTSDV_FORCE_ICOUNT'});
+}
+
+if (defined($simLoopTrips) && defined($ENV{'SOFTSDV_FORCE_LCOUNT'}))
+{
+    $simLoopTrips = ($ENV{'SOFTSDV_FORCE_LCOUNT'});
+}
+
+my $softsdv_os = '';
+my $softsdv_nodes = 0;
+my $softsdv_cpus = 0;
+my $node_memory = 0;
+
+if ($os eq '')
+{
+    if (! defined($total_memory))
+    {
+        $total_memory = 256;
+    }
+}
+else
+{
+    #
+    # Set up OS mode SoftSDV
+    #
+    my $machine_config = pick_machine_config($os, $arch, $softsdv_version);
+
+    if (defined($softsdv_operating_system_name_remap{$os}))
+    {
+        $softsdv_os = $softsdv_operating_system_name_remap{$os};
+    }
+    else
+    {
+        $softsdv_os = $os;
+    }
+
+    ErrorExit('Number of CPUs not defined for benchmark') if ($ncpus eq '');
+    ErrorExit('Unsupported number of simulated CPUs') if (! defined($machine_config->{$ncpus}));
+
+    #
+    # Compute SoftSDV configuration
+    #
+    $softsdv_nodes = $machine_config->{$ncpus}[0];
+    $softsdv_cpus = $machine_config->{$ncpus}[1];
+    if (! defined($total_memory))
+    {
+        $total_memory = $machine_config->{$ncpus}[2];
+        # Hack for old versions.  Checkpoints created with 512MB memory
+        if (($softsdv_version =~ '^v20030312') && ($ncpus < 2)) {
+            $total_memory = 512;
+        }
+    }
+
+    # Memory per node
+    $node_memory = $total_memory / $softsdv_nodes;
+}
+
+# Base save name is the checkpoint of the booted OS before a workload begins
+my $boot_savename = "";
+if ($softsdv_version =~ '^v2003') {
+    # Old versions
+    $boot_savename = "${os}";
+    $boot_savename .= "_ExactFP" if ($exactFP != 0);
+    $boot_savename .= "/${ncpus}_${ncpus}P_" . MemorySizeString($total_memory);
+}
+else {
+    $boot_savename = "Base/${os}";
+    $boot_savename .= "_ExactFP" if ($exactFP != 0);
+    $boot_savename .= "_${ncpus}P_" . MemorySizeString($total_memory);
+}
+$base_savename = "common_checkpoints/${boot_savename}";
+
+#
+# Build a unique checkpoint name for the workload
+#
+my $savename = "${group}/" . ($workload eq '' ? '' : "${workload}_") .
+               "${ncpus}P_" . MemorySizeString($total_memory) .
+               ($region != 0 ? "_r${region}" : '');
+
+my $do_setup = 0;
+if (defined($ENV{'SOFTSDV_SETUP'}))
+{
+    $do_setup = 1;
+}
+
+# New checkpoint location
+if (defined($ENV{'SOFTSDV_LOCAL_SAVE'}))
+{
+    $new_savename = "../checkpoints/${savename}";
+}
+else
+{
+    if ($softsdv_version =~ '^v2003') {
+        # Old versions of SoftSDV saved checkpoints with the release tree
+        $new_savename = "common_checkpoints/${savename}";
+    }
+    else {
+        if ($workloaddir ne '') {
+            $new_savename = "workload_checkpoints/${savename}";
+        }
+        else {
+            $new_savename = "common_checkpoints/${savename}";
+        }
+    }
+}
+
+if (defined($dstdir))
+{
+    $workload_name = `basename $dstdir`;
+    chomp($workload_name);
+}
+
+# Where the baseline release is located
+my $softsdv_base_path = "${benchmark_root}/softsdv_${arch}/release";
+my $softsdv_version_path = "${softsdv_base_path}/${softsdv_version}";
+
+# Baseline binaries and library path
+if ($arch eq 'x86')
+{
+    my $sdvDir = "$softsdv_version_path/softsdv";
+    if (! -d "$sdvDir")
+    {
+        # Older path
+        $sdvDir = "$softsdv_version_path/softsdvia32";
+    }
+    $softsdv_base_bin_path = "${sdvDir}/bin/bin.linux";
+    $softsdv_base_lib_path = "${sdvDir}/lib/lib.linux";
+}
+else
+{
+    $softsdv_base_bin_path = "$softsdv_version_path/softmckinley/bin/bin.linux";
+    $softsdv_base_lib_path = "$softsdv_version_path/softmckinley/lib/lib.linux";
+}
+
+# Where the locally compiled executables and libraries are
+$softsdv_local_bin_path = "$softsdv_version_path/local_compiles/bin";
+$softsdv_local_lib_path = "$softsdv_version_path/local_compiles/lib";
+
+# Where the rc files are located
+my $softsdv_rcfiles = "$softsdv_version_path/rc_files";
+
+# Where the common checkpoints are kept
+my $shared_checkpoints = "$softsdv_version_path/checkpoints";
+my $workload_checkpoints = '';
+if ($workloaddir ne '') {
+    if ($softsdv_version =~ '^v2003') {
+        $workload_checkpoints = $shared_checkpoints;
+    }
+    else {
+        $workload_checkpoints = "$workloaddir/checkpoints/$softsdv_version";
+    }
+}
+
+## Is this a new XML-based SoftSDV configuration or older RC files?
+my $xmlcfg = 0;
+$rc_arg_run = "-rc_file=asim_run.rc";
+$rc_arg_setup = "-rc_file=asim_setup.rc";
+$rc_arg_simpoint = "";
+
+if (-f "${softsdv_rcfiles}/asim_run/cfg.xml")
+{
+    $xmlcfg = 1;
+    $rc_arg_run = "-dbrc=asim_run_db.rc";
+    $rc_arg_setup = "-dbrc=asim_setup_db.rc -DSETUP";
+    if ($findSimPts) {
+        $rc_arg_simpoint = "-dbrc=asim_setup_db_sample.rc -DSETUP";
+    }
+}
+
+
+if (($workloaddir ne '') && ! -d $workloaddir)
+{
+    die ("Can't find workload directory: $workloaddir");
+}
+
+#
+# Load the workload configuration file (a perl file with variables)
+#
+
+if ($workloaddir ne '')
+{
+    my $workload_config = "${workloaddir}/${workload}.config";
+    if (-f "$workload_config")
+    {
+        unless (my $ret = do $workload_config) {
+            ErrorExit("Couldn't parse $workload_config: $@") if $@;
+            ErrorExit("Couldn't do $workload_config: $!")    unless defined $ret;
+            ErrorExit("Couldn't run $workload_config")       unless $ret;
+        }
+    }
+
+    my $pp_file = "${workloaddir}/${workload}.pp";
+    if (-f "$pp_file")
+    {
+        LoadPPFile($pp_file);
+    }
+}
+
+#
+# Region information computed by SoftSDV is saved with the checkpoints.
+# That way one benchmark can have multiple regions databases depending
+# aspects of the configuration.
+#
+my $ppFile = "${workload_checkpoints}/${savename}";
+$ppFile =~ s/_r[0-9]+$//;
+if ($workload_checkpoints ne '' && -f "${ppFile}.pp")
+{
+    LoadPPFile("${ppFile}.pp");
+}
+
+if ($queryregions != 0)
+{
+    #
+    # Just print number of regions and exit.  This helps us keep the logic
+    # that finds individual regions in one place.
+    #
+    if (@workload_regions)
+    {
+        print $#workload_regions + 1 . "\n";
+    }
+    else
+    {
+        print "0\n";
+    }
+    exit(0);
+}
+
+if (! $doBoot && ! @workload_regions && ! $findSimPts && ! $genCheckPoint)
+{
+    #
+    # No setup script.  Benchmark runs from a basic boot checkpoint.
+    #
+    $do_setup = 0;
+    $run_loads_image = 1;
+    $new_savename = $boot_savename;
+}
+
+#
+# Does the workload configuration define a number of instructions to execute?
+#
+
+if ($region > 0)
+{
+    ErrorExit("Illegal region") if ($region > $#workload_regions+1);
+
+    $siminstrs = $workload_regions[$region-1][1];
+    #if the enviroment overwrote this
+    if (defined($ENV{'SOFTSDV_FORCE_ICOUNT'}))
+    {
+       $siminstrs = ($ENV{'SOFTSDV_FORCE_ICOUNT'});
+    }
+
+    print "Preparing region ${region} with ${siminstrs} instructions\n";
+
+    $region_weight =
+        sprintf("-param SIMULATED_REGION_WEIGHT=%.0f -param SIMULATED_REGION_INSTRS_REPRESENTED=%.0f",
+                $workload_regions[$region-1][2] * 100.0,
+                $workload_pin_total_instrs * ($workload_regions[$region-1][2] / 100.0));
+
+    if (defined($workload_regions[$region-1][3])) {
+        if ($workload_regions[$region-1][4] == 0) {
+        }
+        else {
+            $warmupSamples = $workload_regions[$region-1][3] / $workload_regions[$region-1][4];
+        }
+        $warmupRunLen = $workload_regions[$region-1][3];
+    }
+    if (defined($workload_regions[$region-1][4])) {
+        $warmupInterval = $workload_regions[$region-1][4];
+    }
+}
+else {
+    $warmupSamples = $warmChkpt;
+    $warmupRunLen = $warmChkpt;
+}
+
+#
+# Configure SoftSDV
+#
+
+print "Using SoftSDV version ${softsdv_version}\n";
+
+# SSB scripting only with older SoftSDV versions
+my $useSSB = ($softsdv_version =~ /^v2003/) ? 1 : 0;
+
+# Note workload dir for use by some shell scripts
+open(WR, ">$dstdir/.workload") or die "Can't open $dstdir/.workload";
+print WR "${workloaddir}/${workload}\n";
+close(WR);
+
+# Remove old target softsdv directory
+system("rm -rf ${dstdir}/softsdv");
+mkdir("${dstdir}/softsdv") or die "mkdir ${dstdir}/softsdv failed";
+
+# Link to the shared checkpoints directory
+symlink($shared_checkpoints, "$dstdir/softsdv/common_checkpoints") or die "Checkpoint link failed: $?";
+
+# Workload specific checkpoints
+if ($workloaddir ne '') {
+    if ($do_setup) {
+        system("mkdir -p $workload_checkpoints");
+    }
+    symlink($workload_checkpoints, "$dstdir/softsdv/workload_checkpoints");
+}
+
+# Copy SoftSDV run directory
+if (-d "${softsdv_rcfiles}/run")
+{
+    print "Copying SoftSDV run directory...\n";
+    system("(cd ${softsdv_rcfiles}/run; tar --exclude ./common --exclude ./Bios --exclude ./dimms --exclude ./sos -cf - .) | (cd $dstdir/softsdv; tar xf -)");
+}
+
+#
+# Link to SoftSDV common directory
+#
+if (-d "${softsdv_rcfiles}/run/common")
+{
+    symlink("${softsdv_rcfiles}/run/common", "${dstdir}/softsdv/common") or die "symlink common failed";
+}
+
+#
+# Link to disk images.  This keeps the absolute path to disk images out of
+# checkpoints so we can transfer them between sites.
+#
+symlink("${benchmark_root}/softsdv_${arch}/disk_images", "${dstdir}/softsdv/disk_images") or die "symlink disk_images failed";
+
+
+#
+# Can't share Bios -- softsdv writes new files to it.  Make a directory
+# and build links to each file.
+#
+if (-d "${softsdv_rcfiles}/run/Bios")
+{
+    print "Linking to individual Bios files...\n";
+    mkdir("$dstdir/softsdv/Bios") or die "mkdir $dstdir/softsdv/Bios failed";
+    system("cd ${dstdir}/softsdv/Bios; ln -s ${softsdv_rcfiles}/run/Bios/* .");
+}
+
+#
+# Link to dimms and sos files
+#
+if (-d "${softsdv_rcfiles}/run/dimms")
+{
+    print "Linking to dimms directory...\n";
+    symlink("${softsdv_rcfiles}/run/dimms", "${dstdir}/softsdv/dimms") or die "symlink dimms failed";
+}
+if (-d "${softsdv_rcfiles}/run/sos")
+{
+    print "Linking to sos directory...\n";
+    symlink("${softsdv_rcfiles}/run/sos", "${dstdir}/softsdv/sos") or die "symlink sos failed";
+}
+
+print "Copying the csv configuration files...\n";
+system("cp ${softsdv_base_bin_path}/*.csv ${dstdir}/softsdv");
+
+print "Copying empty CD-ROM images...\n";
+mkdir("$dstdir/softsdv/cdrom") or die "mkdir $dstdir/softsdv/cdrom failed";
+system("cp ${benchmark_root}/softsdv_ipf/workloads/TOOLS/empty0.iso ${dstdir}/softsdv/cdrom/cd0.iso");
+system("cp ${benchmark_root}/softsdv_ipf/workloads/TOOLS/empty0.iso ${dstdir}/softsdv/cdrom/cd1.iso");
+
+print "Copying feeder specific Asim updates to run directory...\n";
+system("(cd ${softsdv_rcfiles}/asim_run; tar cf - .) | (cd ${dstdir}/softsdv; tar xf -)");
+
+#
+# Move Vlm directory so Vlm can be a link.  Later scripts may move Vlm to
+# a local disk by adjusting the link.
+#
+print "Adjusting SoftSDV Vlm directory...\n";
+system("(cd ${dstdir}/softsdv; mv Vlm Vlm.base; ln -s Vlm.base Vlm)");
+
+#
+# Update RC scripts with workload-specific information
+#
+if ($xmlcfg)
+{
+    # New XML configuration language
+    open(CFG, ">> $dstdir/softsdv/asimcfg_dynamic.xml") or die("Can't open $dstdir/softsdv/asimcfg_dynamic.xml for writing\n");
+    print CFG "<db>\n";
+
+    # Define a preprocessor variable with the total number of CPUSs
+    print CFG "<!-- Number of CPUs and memory... -->\n";
+    print CFG "<variable name=\"asim_num_cpus\" value=\"${ncpus}\" />\n";
+    print CFG "<define id=\"" . ${ncpus} . "CPUs\" />\n";
+
+    print CFG "<define id=\"" . MemorySizeString($total_memory) . "B_RAM\" />\n";
+    print CFG "\n";
+
+    if ($os =~ 'Windows') {
+        print CFG "<define id=\"OS_WINDOWS\" />\n\n";
+    }
+    else {
+        print CFG "<define id=\"OS_UNIX\" />\n\n";
+    }
+
+    # Define the workload base disk
+    print CFG "<!-- Workload information... -->\n";
+    print CFG "<define id=\"${softsdv_os}\" />\n";
+
+    # Add workload specific configuration strings to main Asim rc file
+    print CFG "<define id=\"${group}\" />\n";
+    print CFG "<define id=\"${group}_${workload}\" />\n";
+
+    print CFG "\n</db>\n";
+    close(CFG);
+
+    ##
+    ## Some configuration must be done late...
+    ##
+    open(CFG, ">> $dstdir/softsdv/asimcfg_dynamic_late.xml") or die("Can't open $dstdir/softsdv/asimcfg_dynamic.xml for writing\n");
+    print CFG "<db>\n";
+
+    if ($ncpus > 1)
+    {
+        print CFG "<item name=\"time_slice\" value=\"401\" override=\"yes\" />\n";
+    }
+
+    # Exact FP?  Add argument to cfg file.
+    if ($exactFP)
+    {
+        print CFG "<item name=\"exact_fp\" value=\"on\" override=\"yes\" />\n";
+    }
+
+    print CFG "\n</db>\n";
+    close(CFG);
+}
+else
+{
+    open(CFG, ">> $dstdir/softsdv/asimcfg_dynamic.rc") or die("Can't open $dstdir/softsdv/asimcfg_dynamic.rc for writing\n");
+
+    # Define a preprocessor variable with the total number of CPUSs
+    print CFG "#define ${ncpus}_CPUS\n";
+
+    # Exact FP?  Add argument to cfg file.
+    print CFG "\n-exact_fp\n" if ($exactFP);
+
+    # Add workload specific configuration strings to main Asim rc file
+    print CFG "#define ${group}\n";
+    print CFG "#define ${group}_${workload}\n";
+
+    close(CFG);
+}
+
+# Asim will run in the softsdv directory.  Make a link back up to awbcmds.
+symlink("../awbcmds", "${dstdir}/softsdv/awbcmds");
+
+# Recreate local checkpoints directory
+system("rm -rf ${dstdir}/checkpoints");
+mkdir("${dstdir}/checkpoints") or die "mkdir ${dstdir}/checkpoints failed";
+
+# Benchmark output directory (files copied here by client scripts)
+mkdir("$dstdir/softsdv/OUTPUT") or die "mkdir $dstdir/softsdv/OUTPUT failed";
+
+# Benchmark source directory
+if (! -d "$dstdir/softsdv/AUTO")
+{
+    mkdir("$dstdir/softsdv/AUTO") or die "mkdir $dstdir/softsdv/AUTO failed";
+}
+
+if (($softsdv_version =~ /^v2003/) || ($group eq 'UserMode')) {
+    # Old versions of SoftSDV and user mode use hdb to execute SoftSDV.
+    # Break is broken in ssdv in the v2004 releases so we're still using
+    # hdb in user mode.
+    $asim_softsdv_args = "hdb -d";
+}
+else {
+    $asim_softsdv_args = "ssdv -con -vga=\${vga}";
+    if ($arch eq 'x86') {
+        $asim_softsdv_args .= " -ia32";
+    }
+    else {
+        $asim_softsdv_args .= " -ipf";
+    }
+}
+$asim_softsdv_workload_args .= " -group ${group} -workload ${workload}";
+
+if ($group ne 'UserMode')
+{
+    print "Configuring SoftSDV for $ncpus CPUs and " . MemorySizeString($total_memory) . " of memory...\n";
+
+    if ($arch eq 'x86') {
+        ##
+        ## SoftSDV IA32 configuration
+        ##
+
+        # Newer XML configuration doesn't need a script.  Is this an
+        # older setup?
+        if (-f "$dstdir/softsdv/config_linux")
+        {
+            my $hardware = '-cpu=PRESCOTT_EM64T -chipset=TWINCASTLE';
+
+            system("cd $dstdir/softsdv; ./config_linux " .
+                   "$hardware " .
+                   "-display=OFF " .
+                   "-autoboot=${softsdv_os} " .
+                   "-nic=STUB_NETWORK -debugger=MDB -debugger_mode=CONSOLE " .
+                   "-num_of_cpus=${softsdv_cpus} " .
+                   "-ram=" . MemorySizeString($total_memory) . "B");
+        }
+    }
+    else {
+        ##
+        ## SoftSDV IPF configuration
+        ##
+        if ($softsdv_version =~ /^v2003/) {
+            # Older SoftSDV configuration script syntax
+            system("cd $dstdir/softsdv; ./config_linux $softsdv_nodes $softsdv_cpus " .
+                   MemorySizeString($node_memory) . " $softsdv_os hdb 0");
+        }
+        else {
+            system("cd $dstdir/softsdv; ./config_linux " .
+                   "-nodes=${softsdv_nodes} " .
+                   "-cpus=${softsdv_cpus} " .
+                   "-ram=${node_memory} " .
+                   "-autoboot=${softsdv_os} " .
+                   "-nic=NO_NIC " .
+                   "-debugger=ssdv_con");
+        }
+    }
+
+    #
+    # Set hdb arguments.  Asim also needs these to know the number of
+    # CPUs and whether to run in OS mode.
+    #
+    $hdb_args = "-num_cpus=${ncpus} -os";
+}
+else
+{
+    #
+    # User mode needs a special asim_run.rc file
+    #
+    SubstCopyFile("${srcdir}/rc/asim_user_run.rc", "${dstdir}/softsdv/asim_run.rc");
+
+    #
+    # Build a run script
+    #
+    open(RUNFILE, "> ${dstdir}/softsdv/run") or die("Can't open ${dstdir}/softsdv/run: $!\n");
+    print RUNFILE "#!/bin/sh\n";
+    print RUNFILE "hdb \$*\n";
+    close(RUNFILE);
+    chmod(0755, "${dstdir}/softsdv/run");
+
+    $hdb_args = "-d -sysapi=Linux64 AUTO/benchmark";
+
+    #
+    # Append benchmark arguments from workload's .args file to hdb arguments
+    #
+    if (($workloaddir ne '') && (-f "${workloaddir}/${workload}.args"))
+    {
+        unless (open(ARGSFILE, "< ${workloaddir}/${workload}.args"))
+        {
+            print STDERR "Can't open ${workloaddir}/${workload}.args: $!\n";
+            return;
+        }
+        my $more_hdb_args = <ARGSFILE>;
+        close(ARGSFILE);
+        chomp($more_hdb_args);
+        $hdb_args = $hdb_args . " " . $more_hdb_args;
+    }
+
+    SubstCopyFile("${srcdir}/rc/vpccfg_ipf_user.rc", "${dstdir}/softsdv/vpccfg_user.rc");
+}
+
+#
+# Build a shell script that sets up the environment and invokes SoftSDV
+#
+open(SE, "> ${dstdir}/softsdv/softsdv_env.sh") or die("Can't open ${dstdir}/softsdv/softsdv_env.sh");
+print SE "#!/bin/sh\n";
+print SE "#\n";
+print SE "# Set up SoftSDV execution environment and run SoftSDV\n";
+print SE "#\n";
+print SE "PATH=${softsdv_local_bin_path}:${softsdv_base_bin_path}:\$PATH\n";
+print SE "# SoftSDV puts PATH at the head of Perl's \@INC list.  Silly...\n";
+print SE "PATH=${srcdir}/pm:\$PATH\n";
+print SE "export PATH\n\n";
+print SE "LD_LIBRARY_PATH=${softsdv_local_lib_path}:${softsdv_base_lib_path}:\$LD_LIBRARY_PATH\n";
+print SE "\n";
+print SE "# Look for a series of local libraries -- work around NFS limitations\n";
+print SE "# to protect running jobs by not overwriting old libraries.\n";
+print SE "i=0\n";
+print SE "while [ -d \"${softsdv_local_lib_path}\${i}\" ]; do\n";
+print SE "  LD_LIBRARY_PATH=${softsdv_local_lib_path}\${i}:\$LD_LIBRARY_PATH\n";
+print SE "  i=`expr \$i + 1`\n";
+print SE "done\n";
+print SE "\n";
+print SE "LD_LIBRARY_PATH=${modeldir}/softsdv:\$LD_LIBRARY_PATH\n";
+print SE "export LD_LIBRARY_PATH\n\n";
+print SE "#\n";
+print SE "PERL5LIB=${srcdir}/pm:\$PERL5LIB\n";
+print SE "export PERL5LIB\n\n";
+print SE "SOS_CONFIG_DIR=config\n";
+print SE "export SOS_CONFIG_DIR\n";
+print SE "\n";
+print SE "if [ -f \"sh/softsdv_setup.sh\" ]; then\n";
+print SE "  source sh/softsdv_setup.sh\n";
+print SE "fi\n";
+close(SE);
+chmod(0755, "${dstdir}/softsdv/softsdv_env.sh");
+
+#
+# Build the main execution part of the RC script.
+#
+open(AM, "> ${dstdir}/softsdv/asim_main.rc") or die("Can't open ${dstdir}/softsdv/asim_main.rc");
+if ($useSSB) {
+    #
+    # Old SoftSDV versions use SSB for scripting and the hdb script is simple
+    #
+    print AM "c\n";
+    print AM "c\n" if ($warmupSamples != 0);
+}
+else {
+    if ($arch eq 'ipf') {
+        print AM "\@vpc.cpu vis_conf logical\n";
+        print AM "\@vpc.cpu trans ssc_mark all\n";  # Enable NOP markers on IPF
+    }
+    print AM "!bphit off\n";
+    print AM "!lang perl\n";
+    print AM "\$| = 1;         ## Autoflush STDOUT (needed for batch jobs)\n";
+    print AM "use asim;\n";
+
+    if ($os =~ /Linux/) {
+        ##
+        ## This is simple right now because only one version of SoftSDV uses
+        ## this code (v2004...).  It will become more complicated over time.
+        ##
+        if ($os eq 'BigLinux') {
+            die("Linux AS 2.1 guest not support on this SoftSDV release.");
+        }
+        if ($arch ne 'x86')
+        {
+           print AM "use linux_as3_stats;\n";
+           print AM "os_stats::init('${os}');\n";
+        }
+        else
+        {
+            if ($os eq 'Linux32')
+            {
+                print AM "use linux_sles9_i386_stats;\n";
+                print AM "os_stats::init('sles9_i386');\n";
+            }
+            elsif ($os eq 'Linux64')
+            {
+                print AM "use linux_sles9_x86_64_stats;\n";
+                print AM "os_stats::init('sles9_x86_64');\n";
+            }
+        }
+    }
+
+    my $m;
+    print AM "\$asim::asim_mark_start = ${startMarker};\n" if (defined($startMarker));
+    print AM "\$asim::asim_mark_end = ${endMarker};\n" if (defined($endMarker));
+
+    print AM "our \%config;\n";
+    print AM "# Arch that we are simulating\n";
+    print AM "\$config{'arch'} = '${arch}';\n";
+    print AM "# Checkpoint of OS boot for this configuration\n";
+    print AM "\$config{'base_save_name'} = '${base_savename}';\n";
+    print AM "# Setup for this benchmark boots OS?  0 if starts from base boot\n";
+    print AM "\$config{'boot'} = ${doBoot};\n";
+    print AM "# Guest OS name\n";
+    print AM "\$config{'os'} = ${os};\n";
+    print AM "# No image specific checkpoint.  Load benchmark from base boot\n";
+    print AM "\$config{'run_loads_image'} = ${run_loads_image};\n";
+    print AM "# Checkpoint name of this benchmark\n";
+    print AM "\$config{'save_name'} = '${new_savename}';\n" if (! $run_loads_image);
+    print AM "# Times start marker is seen before reaching region to simulate\n";
+    print AM "\$config{'start_count'} = ${startCnt};\n";
+
+    if (defined($simLoopTrips)) {
+        ##
+        ## Count the region to simulation in loop intervals.  Loops must be
+        ## tagged.
+        ##
+        print AM "# Marker for loop trips\n";
+        print AM "\$config{'loop_trip_marker'} = '${loopMarker}';\n";
+        print AM "# Number of loop trips to simulate in performance mode\n";
+        print AM "\$config{'sim_loop_trips'} = '${simLoopTrips}';\n";
+        print AM "# Number of loop trips to save for Asim's warm-up mode\n";
+        print AM "\$config{'warmup_chkpt_loops'} = ${warmupRunLen};\n";
+        if (defined($warmRun)) {
+            print AM "# Number of loop trips to execute in Asim's warm-up mode\n";
+            print AM "\$config{'warmup_run_loops'} = ${warmRun};\n";
+        }
+        if ($do_setup && $findSimPts) {
+            die("SimPoints and loop trip counts are incompatible");
+        }
+    }
+    else {
+        ##
+        ## Count the region to simulation using instructions.
+        ##
+        print AM "# Number of instructions to simulate in performance mode\n";
+        print AM "\$config{'sim_instrs'} = ${siminstrs};\n";
+        print AM "# Number of instructions to save for Asim's warm-up mode\n";
+        print AM "\$config{'warmup_chkpt_instrs'} = ${warmupRunLen};\n";
+        if (defined($warmRun)) {
+            print AM "# Number of instructions to execute in Asim's warm-up mode\n";
+            print AM "\$config{'warmup_run_instrs'} = ${warmRun};\n";
+        }
+        if ($do_setup) {
+            print AM "# Find SimPoints during setup?;\n";
+            print AM "\$config{'simpoint_region_length'} = ${findSimPts};\n";
+        }
+    }
+
+    print AM "!lang ssdv\n";
+}
+close(AM);
+
+#
+# Update SSB scripts with information on how to find process id and name
+#
+if ($useSSB) {
+    open(CFG, "> ${dstdir}/softsdv/asim_main.ssb") or die("Can't open ${dstdir}/softsdv/asim_main.ssb");
+    print CFG "//\n";
+    print CFG "// This SSB module is generated automatically for the run.  Include\n";
+    print CFG "// it at the top of the main SSB routine.\n";
+    print CFG "//\n";
+    if (defined($context_info{$os}{$softsdv_version}))
+    {
+        print CFG "    action asim_context_info('${os}', $context_info{$os}{$softsdv_version}[0], $context_info{$os}{$softsdv_version}[1]);\n";
+        print CFG "    action asim_timer_info('$context_info{$os}{$softsdv_version}[2]');\n";
+        if (defined($context_info{$os}{$softsdv_version}[3]))
+        {
+            print CFG "    action asim_idle_info('$context_info{$os}{$softsdv_version}[3]');\n";
+        }
+    }
+
+    print CFG "    \$asim_ssb_start = ${startMarker};\n" if (defined($startMarker));
+    print CFG "    \$asim_ssb_end   = ${endMarker};\n" if (defined($endMarker));
+
+    close(CFG);
+}
+
+#
+# Generate the control scripts
+#
+my $tpath;
+if ($group eq 'UserMode') {
+    $tpath = $srcdir . '/rc/asim_user_run_db.rc';
+}
+else {
+    if ($softsdv_version =~ /^v2003/) {
+        $tpath = $srcdir . '/rc/asim_run_db_ssb.rc';
+    }
+    else {
+        $tpath = $srcdir . '/rc/asim_run_db.rc';
+    }
+}
+if (-f "${workloaddir}/asim_run_db.rc") {
+    $tpath = "${workloaddir}/asim_run_db.rc";
+}
+SubstCopyFile($tpath, "${dstdir}/softsdv/asim_run_db.rc");
+
+if ($useSSB) {
+    SubstCopyFile("${srcdir}/ssb/asim.ssb", "${dstdir}/softsdv/asim.ssb");
+
+    my $ssbrun = $srcdir . "/ssb/run.ssb";
+    if ($group eq 'UserMode') {
+        $ssbrun = $srcdir . "/ssb/null.ssb";
+    }
+    if (-f "${workloaddir}/run.ssb") {
+        $ssbrun = "${workloaddir}/run.ssb";
+    }
+
+    SubstCopyFile($ssbrun, "${dstdir}/softsdv/run.ssb");
+}
+
+#
+# Do setup if requested and no region is specified
+#
+if ($do_setup && ! $region)
+{
+    $tpath = ${srcdir} . "/rc/asim_setup_db.rc";
+    if (-f "${workloaddir}/asim_setup_db.rc") {
+        $tpath = "${workloaddir}/asim_setup_db.rc";
+    }
+    SubstCopyFile($tpath, "${dstdir}/softsdv/asim_setup_db.rc");
+
+    $tpath = ${srcdir} . "/rc/asim_setup_db_sample.rc";
+    if (-f "${workloaddir}/asim_setup_db_sample.rc") {
+        $tpath = "${workloaddir}/asim_setup_db_sample.rc";
+    }
+    SubstCopyFile($tpath, "${dstdir}/softsdv/asim_setup_db_sample.rc");
+
+    if ($useSSB) {
+        $tpath = "${workloaddir}/setup.ssb";
+        SubstCopyFile($tpath, "${dstdir}/softsdv/setup.ssb") if ($tpath ne '');
+    }
+
+    SubstCopyFile("${srcdir}/shell-scripts/setup_softsdv.template", "${dstdir}/setup_softsdv");
+    chmod(0755, "${dstdir}/setup_softsdv");
+}
+
+#
+# Generate the run script.  When the benchmark has multiple regions and
+# region is 0 there is no run script.  (Region numbers start at 1.)
+#
+if (($region > 0) || ! @workload_regions)
+{
+    SubstCopyFile("${srcdir}/shell-scripts/run.template", "${dstdir}/run");
+    chmod(0755, "${dstdir}/run");
+}
+else
+{
+    open(OFILE, "> ${dstdir}/run");
+    print OFILE "#!/bin/sh\n\n";
+    print OFILE "echo Nothing to do.  This configuration is just used to set up\n";
+    print OFILE "echo other regions.\n";
+    close(OFILE);
+}
+
+print "Configured for region ${region}\n" if ($region);
+
+if ($doBoot)
+{
+    #
+    # SoftSDV group ships Windows workloads that autoinvoke AUTO/RUN.CMD
+    # and Linux ones that look for AUTO/ssdv_run.
+    #
+    my $autocmd = '';
+    if ($os =~ 'Linux') {
+        $autocmd = $srcdir . '/shell-scripts/invoke_workload.sh';
+    }
+    if ($os =~ 'Windows') {
+        $autocmd = $srcdir . '/shell-scripts/RUN.CMD';
+    }
+
+    die "Illegal --os argument: $os\n" if ($autocmd eq '');
+
+    SubstCopyFile($autocmd, "${dstdir}/softsdv/AUTO/RUN.CMD");
+    system("cd ${dstdir}/softsdv/AUTO; ln -s RUN.CMD ssdv_run");
+}
+
+#
+# Copy some control scripts derived from the name of the workload.
+#
+if ($workloaddir ne '')
+{
+    my $ext;
+    foreach $ext ('pm')
+    {
+        system("cp ${workloaddir}/${workload}.${ext} ${dstdir}/softsdv/benchmark.${ext}")
+            if (-f "${workloaddir}/${workload}.${ext}");
+    }
+}
+
+#
+# Copy workload files.  Don't bother if a specific region is requested since
+# the benchmark is loaded in the checkpoint.
+#
+if (($region == 0) && ($workloaddir ne '') && ($do_setup || $run_loads_image))
+{
+    print "Processing workload configuration...\n";
+
+    # benchmark executable (or shell script)
+    system("cp ${workloaddir}/${workload} ${dstdir}/softsdv/AUTO/benchmark")
+        if (-f "${workloaddir}/${workload}");
+
+    # cmd file (for Windows guest)
+    SubstCopyFile("${workloaddir}/${workload}.cmd", "${dstdir}/softsdv/AUTO/benchmark.cmd")
+        if (-f "${workloaddir}/${workload}.cmd");
+
+    # copy tar, zip and cmd files.
+    my $ext;
+    foreach $ext ('tar.gz', 'zip')
+    {
+        system("cp ${workloaddir}/${workload}.${ext} ${dstdir}/softsdv/AUTO/benchmark.${ext}")
+            if (-f "${workloaddir}/${workload}.${ext}");
+    }
+
+    # Benchmark arguments
+    open(OFILE, "> ${dstdir}/softsdv/AUTO/benchmark.args");
+    print OFILE "${workload_args} " if (defined($workload_args));
+    if (defined($ENV{'SOFTSDV_GUEST_ARGS'})) {
+        print "Overriding guest args:  $ENV{'SOFTSDV_GUEST_ARGS'}\n";
+        print OFILE "$ENV{'SOFTSDV_GUEST_ARGS'}\n";
+    }
+    elsif (defined($workload_guest_args)) {
+        print OFILE "${workload_guest_args}\n";
+    }
+    else {
+        print OFILE "\n" if (defined($workload_args));
+    }
+    close(OFILE);
+
+    # Benchmark output files
+    if (@workload_ofiles)
+    {
+        open(OFILE, "> ${dstdir}/softsdv/AUTO/benchmark.ofiles");
+        foreach $_ (@workload_ofiles)
+        {
+            printf OFILE "$_ ";
+        }
+        printf OFILE "\n";
+        close(OFILE);
+    }
+}
+
+# Override asim_run_db.rc?
+if (($workloaddir ne '') && -f "${workloaddir}/${workload}.dbrc") {
+    system("cp ${workloaddir}/${workload}.dbrc ${dstdir}/softsdv/asim_run_db.rc");
+}
+
+#
+# Make sure a few files exist in the AUTO directory to avoid errors in the
+# client scripts.
+#
+if (! -f "${dstdir}/softsdv/AUTO/benchmark.tar.gz")
+{
+    system("cp ${benchmark_root}/softsdv_ipf/workloads/TOOLS/empty.tar.gz ${dstdir}/softsdv/AUTO/benchmark.tar.gz");
+}
+system("touch ${dstdir}/softsdv/AUTO/benchmark.args");
+system("touch ${dstdir}/softsdv/AUTO/benchmark.ofiles");
+system("touch ${dstdir}/softsdv/regions.rc");
+
+
+__END__
+
+=head1 NAME
+
+setup-softsdv - Configure a SoftSDV execution environment for Asim
+
+=head1 SYNOPSYS
+
+setup-softsdv --arch <x86 or ipf>
+              --boot
+              --endmarker <#>
+              --exactfp
+              --findsimpts <#>
+              --group <name>
+              --ncpus <#>
+              --os <name>
+              --queryregions
+              --region <#>
+              --startcnt <#>
+              --startmarker <#>
+              --version <name>
+              --warmcheckpoint <#>
+              --warmrun <#>
+              --workload <workload name>
+              --workloaddir <path>
+              <src dir>  <dst dir>
+
+=head1 DESCRIPTION
+
+This script has all the logic for building an Asim/SoftSDV benchmark
+execution environment.  It attempts to cope with multiple versions of
+SoftSDV, simulated ISAs and simulated machine configurations.
+
+Three arguments are required:  --workload, the source directory and the
+destination directory.  For now the source directory is always the
+full path of src/asim-feeder/tools/scripts/softsdv in your checked-
+out source tree.  The script uses the source directory to find a number
+of other configuration files.
+
+=head1 SWITCHES
+
+The following command line switches are currently supported:
+
+=over 4 
+
+=item --arch <x86 or ipf>
+
+Simulated architecture.
+
+=item --boot
+
+This workload boots the operating system.  Most workloads start from a
+common OS boot checkpoint and do not use this flag.  Only workloads that
+need an evironment other than the common OS boot set this flag.
+
+=item --endmarker <#>
+
+The value of the special tag instruction in the workload signaling the
+end of the workload to SoftSDV.  Defaults to 32770.
+
+=item --exactfp
+
+IPF only.  Use full 82 bit FP emulation.  Very slow!  Use only in desperation!
+
+=item --findsimpts <#>
+
+Find SimPoints (see http://vssad.intel.com/pubproj/pinpoints/) during
+benchmark setup.  The argument is the number of instructions/CPU for
+each region.
+
+=item --gencheckpoint
+
+Simple workloads that do not use SimPoints can be run in one of two
+ways.  For short-running workloads the base boot checkpoint can be
+restored and the workload is loaded every time it is run.  That is
+the default.  For longer-running workloads that have been decorated
+with marker instructions, where the time to reach the marked region
+is too long to wait on each run, use the gencheckpoint option to
+force SoftSDV to restore the workload from a checkpoint.
+
+=item --group <name>
+
+A secondary classification beyond workload to make the checkpoint trees
+cleaner, among other things.  This value must be specified.
+
+The special group named "UserMode" loads benchmarks in SoftSDV's
+user-space only mode without loading an operating system.  Use this mode
+for microbenchmarks.
+
+=item --memory_mb <#>
+
+Override the default memory configuration, specifying the memory size for
+the configuration.  Only appropriate for workloads that boot from scratch,
+like Oracle/TPC-C.
+
+=item --ncpus <#>
+
+Number of CPUs to simulate in SoftSDV.  The default is 1.
+
+=item --os <name>
+
+Operating system on which to run the workload.  The default is Linux.
+
+=item --queryregions
+
+Instead of building an execution environment the number of regions in the
+specified workload is printed.  This is the preferred method for testing
+whether a workload has multiple regions.  It keeps the logic for
+managing the region database completely inside this script.  No source
+or destination directories are required with --queryregions.
+
+=item --region <#>
+
+For benchmarks with multiple regions (e.g. SimPoints) specifies which region
+to simulate.
+
+=item --startcnt <#>
+
+The number of times the start marker (see below) as seen before the
+sampling portion of the workload begins.
+
+=item --startmarker <#>
+
+The value of the special tag instruction in the workload signaling the
+beginning of the workload to SoftSDV.  Defaults to 32769.
+
+=item --version
+
+The SoftSDV version.
+
+=item --warmcheckpoint <#>
+
+Total instructions per CPU to leave at the beginning of
+checkpoints for cache warm-up before simulation.  SoftSDV
+can feed Asim a stream of instructions that are parsed
+rapidly to fill caches and train predictors.
+
+If --warmrun is not specified --warmcheckpoint is also the
+number of instructions per CPU used for warm-up before
+simulations.
+
+=item --warmrun <#>
+
+Total instructions per CPU to use for warm-up at the
+beginning of a simulation.  This value must be less than
+the argument to --warmcheckpoint.  --warmrun allows for
+leaving a large potential warm-up region at the beginning
+of a checkpoint in case it is needed later while actually
+using a shorter warm-up for current simulations.  SoftSDV
+can fast-forward through the extra warm-up instructions
+saved in a checkpoint much faster than Asim's warm-up mode.
+
+The value of --warmrun can also be overriden as an argument
+to a benchmark's run script when Asim is executed.
+
+=item --workload <name>
+
+The name of the workload.  This name is stored in the stats file generated
+by Asim.  It is also used to find other configuration files if --workloaddir
+is specified.
+
+=item --workloaddir <path>
+
+A directory holding a series of files with names beginning with the workload
+name specified in --workload.  These files hold other configuration values
+such as the arguments that must be passed to the workload.
+
+Note that amc replaces the string BENCHMARKDIR with the root of the benchmark
+area before invoking this script.  This makes it easy to define a benchmark
+configuration that works at many sites.
+
+=back
+
+=head1 AUTHOR
+
+Michael Adler
+
+=head1 COPYRIGHT
+
+Copyright (C) 2003-2006 Intel Corporation
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+=cut

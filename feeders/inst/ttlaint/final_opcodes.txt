@@ -1,0 +1,640 @@
+/********************************************************************/
+/* This file is just a table with de opcode/functions assigments of */
+/* All Tarantula ISA, keep in mind that we reuse some vaxfp opcodes */
+/********************************************************************/
+
+             Opcode     EX.
+VLDQ           20      x010
+
+VLDL           20      x000
+
+VLDT           20      x011
+
+VLDS           20      x001
+
+VSTQ           21      x010
+
+VSTL           21      x000
+
+VSTT           21      x011
+
+VSTS           21      x001
+
+/**** for prefetching purposes ****/
+VLDPF          20      x100
+VSTPF          21      x100
+/**********************************/
+
+            Opcode     Function
+
+VVADDT         15         01
+VSADDT
+VVADDT/C       24         00
+VSADDT/C
+VVADDT/M       24         01
+VSADDT/M
+VVADDT/D       24         02
+VSADDT/D
+VVADDT/U       24         03
+VSADDT/U
+VVADDT/UC      24         04
+VSADDT/UC
+VVADDT/UM      24         05
+VSADDT/UM
+VVADDT/UD      24         06
+VSADDT/UD
+VVADDT/SU      24         07
+VSADDT/SU
+VVADDT/SUC     24         08
+VSADDT/SUC
+VVADDT/SUM     24         09
+VSADDT/SUM
+VVADDT/SUD     24         0A
+VSADDT/SUD
+VVADDT/SUI     24         0B
+VSADDT/SUI
+VVADDT/SUIC    24         0C
+VSADDT/SUIC
+VVADDT/SUIM    24         0D
+VSADDT/SUIM
+VVADDT/SUID    24         0E
+VSADDT/SUID
+
+VVADDS         15         02
+VSADDS
+VVADDS/C       24         0F
+VSADDS/C
+VVADDS/M       24         10
+VSADDS/M
+VVADDS/D       24         11
+VSADDS/D
+VVADDS/U       24         12
+VSADDS/U
+VVADDS/UC      24         13
+VSADDS/UC
+VVADDS/UM      24         14
+VSADDS/UM
+VVADDS/UD      24         15
+VSADDS/UD
+VVADDS/SU      24         16
+VSADDS/SU
+VVADDS/SUC     24         17
+VSADDS/SUC
+VVADDS/SUM     24         18
+VSADDS/SUM
+VVADDS/SUD     24         19
+VSADDS/SUD
+VVADDS/SUI     24         1A
+VSADDS/SUI
+VVADDS/SUIC    24         1B
+VSADDS/SUIC
+VVADDS/SUIM    24         1C
+VSADDS/SUIM
+VVADDS/SUID    24         1D
+VSADDS/SUID
+
+VVADDQ         15         03
+VSADDQ
+
+VVADDL         15         04
+VSADDL
+
+VVSUBT         15         05
+VSSUBT
+VVSUBT/C       24         1E
+VSSUBT/C
+VVSUBT/M       24         1F
+VSSUBT/M
+VVSUBT/D       24         20
+VSSUBT/D
+VVSUBT/U       24         21
+VSSUBT/U
+VVSUBT/UC      24         22
+VSSUBT/UC
+VVSUBT/UM      24         23
+VSSUBT/UM
+VVSUBT/UD      24         24
+VSSUBT/UD
+VVSUBT/SU      24         25
+VSSUBT/SU
+VVSUBT/SUC     24         26
+VSSUBT/SUC
+VVSUBT/SUM     24         27
+VSSUBT/SUM
+VVSUBT/SUD     24         28
+VSSUBT/SUD
+VVSUBT/SUI     24         29
+VSSUBT/SUI
+VVSUBT/SUIC    24         2A
+VSSUBT/SUIC
+VVSUBT/SUIM    24         2B
+VSSUBT/SUIM
+VVSUBT/SUID    24         2C
+VSSUBT/SUID
+
+VVSUBS         15         06
+VSSUBS
+VVSUBS/C       24         2D
+VSSUBS/C
+VVSUBS/M       24         2E
+VSSUBS/M
+VVSUBS/D       24         2F
+VSSUBS/D
+VVSUBS/U       24         30
+VSSUBS/U
+VVSUBS/UC      24         31
+VSSUBS/UC
+VVSUBS/UM      24         32
+VSSUBS/UM
+VVSUBS/UD      24         33
+VSSUBS/UD
+VVSUBS/SU      24         34
+VSSUBS/SU
+VVSUBS/SUC     24         35
+VSSUBS/SUC
+VVSUBS/SUM     24         36
+VSSUBS/SUM
+VVSUBS/SUD     24         37
+VSSUBS/SUD
+VVSUBS/SUI     24         38
+VSSUBS/SUI
+VVSUBS/SUIC    24         39
+VSSUBS/SUIC
+VVSUBS/SUIM    24         3A
+VSSUBS/SUIM
+VVSUBS/SUID    24         3B
+VSSUBS/SUID
+
+VVSUBQ         15         07
+VSSUBQ
+
+VVSUBL         15         08
+VSSUBL
+
+VVMULT         15         09
+VSMULT
+VVMULT/C       24         3C
+VSMULT/C
+VVMULT/M       24         3D
+VSMULT/M
+VVMULT/D       24         3E
+VSMULT/D
+VVMULT/U       24         3F
+VSMULT/U
+VVMULT/UC      24         40
+VSMULT/UC
+VVMULT/UM      24         41
+VSMULT/UM
+VVMULT/UD      24         42
+VSMULT/UD
+VVMULT/SU      24         43
+VSMULT/SU
+VVMULT/SUC     24         44
+VSMULT/SUC
+VVMULT/SUM     24         45
+VSMULT/SUM
+VVMULT/SUD     24         46
+VSMULT/SUD
+VVMULT/SUI     24         47
+VSMULT/SUI
+VVMULT/SUIC    24         48
+VSMULT/SUIC
+VVMULT/SUIM    24         49
+VSMULT/SUIM
+VVMULT/SUID    24         4A
+VSMULT/SUID
+
+VVMULS         15         0A
+VSMULS
+VVMULS/C       24         4B
+VSMULS/C
+VVMULS/M       24         4C
+VSMULS/M
+VVMULS/D       24         4D
+VSMULS/D
+VVMULS/U       24         4E
+VSMULS/U
+VVMULS/UC      24         4F
+VSMULS/UC
+VVMULS/UM      24         50
+VSMULS/UM
+VVMULS/UD      24         51
+VSMULS/UD
+VVMULS/SU      24         52
+VSMULS/SU
+VVMULS/SUC     24         53
+VSMULS/SUC
+VVMULS/SUM     24         54
+VSMULS/SUM
+VVMULS/SUD     24         55
+VSMULS/SUD
+VVMULS/SUI     24         56
+VSMULS/SUI
+VVMULS/SUIC    24         57
+VSMULS/SUIC
+VVMULS/SUIM    24         58
+VSMULS/SUIM
+VVMULS/SUID    24         59
+VSMULS/SUID
+
+VVMULQ         15         0B
+VSMULQ
+
+VVMULL         15         0C
+VSMULL
+
+VVUMULH        15         0D
+VSUMULH
+
+VVDIVT         15         0E
+VSDIVT
+VVDIVT/C       24         5A
+VSDIVT/C
+VVDIVT/M       24         5B
+VSDIVT/M
+VVDIVT/D       24         5C
+VSDIVT/D
+VVDIVT/U       24         5D
+VSDIVT/U
+VVDIVT/UC      24         5E
+VSDIVT/UC
+VVDIVT/UM      24         5F
+VSDIVT/UM
+VVDIVT/UD      24         60
+VSDIVT/UD
+VVDIVT/SU      24         61
+VSDIVT/SU
+VVDIVT/SUC     24         62
+VSDIVT/SUC
+VVDIVT/SUM     24         63
+VSDIVT/SUM
+VVDIVT/SUD     24         64
+VSDIVT/SUD
+VVDIVT/SUI     24         65
+VSDIVT/SUI
+VVDIVT/SUIC    24         66
+VSDIVT/SUIC
+VVDIVT/SUIM    24         67
+VSDIVT/SUIM
+VVDIVT/SUID    24         68
+VSDIVT/SUID
+
+VVDIVS         15         0F
+VSDIVS
+VVDIVS/C       24         69
+VSDIVS/C
+VVDIVS/M       24         6A
+VSDIVS/M
+VVDIVS/D       24         6B
+VSDIVS/D
+VVDIVS/U       24         6C
+VSDIVS/U
+VVDIVS/UC      24         6D
+VSDIVS/UC
+VVDIVS/UM      24         6E
+VSDIVS/UM
+VVDIVS/UD      24         6F
+VSDIVS/UD
+VVDIVS/SU      24         70
+VSDIVS/SU
+VVDIVS/SUC     24         71
+VSDIVS/SUC
+VVDIVS/SUM     24         72
+VSDIVS/SUM
+VVDIVS/SUD     24         73
+VSDIVS/SUD
+VVDIVS/SUI     24         74
+VSDIVS/SUI
+VVDIVS/SUIC    24         75
+VSDIVS/SUIC
+VVDIVS/SUIM    24         76
+VSDIVS/SUIM
+VVDIVS/SUID    24         77
+VSDIVS/SUID
+
+VSQRTT         15         10
+VSQRTT/C       24         78
+VSQRTT/M       24         79
+VSQRTT/D       24         7A
+VSQRTT/U       24         7B
+VSQRTT/UC      24         7C
+VSQRTT/UM      24         7D
+VSQRTT/UD      24         7E
+VSQRTT/SU      24         7F
+VSQRTT/SUC     24         80
+VSQRTT/SUM     24         81
+VSQRTT/SUD     24         82
+VSQRTT/SUI     24         83
+VSQRTT/SUIC    24         84
+VSQRTT/SUIM    24         85
+VSQRTT/SUID    24         86
+
+VSQRTS         15         11
+VSQRTS/C       24         87
+VSQRTS/M       24         88
+VSQRTS/D       24         89
+VSQRTS/U       24         8A
+VSQRTS/UC      24         8B
+VSQRTS/UM      24         8C
+VSQRTS/UD      24         8D
+VSQRTS/SU      24         8E
+VSQRTS/SUC     24         8F
+VSQRTS/SUM     24         90
+VSQRTS/SUD     24         91
+VSQRTS/SUI     24         92
+VSQRTS/SUIC    24         93
+VSQRTS/SUIM    24         94
+VSQRTS/SUID    24         95
+
+VS4ADDQ        15         12
+
+VS8ADDQ        15         13
+
+VS4ADDL        15         14
+
+VS8ADDL        15         15
+
+VS4SUBQ        15         16
+
+VS8SUBQ        15         17
+
+VS4SUBL        15         18
+
+VS8SUBL        15         19
+
+VVCMPEQ        15         1A
+VSCMPEQ
+
+VVCMPLE        15         1B
+VSCMPLE
+
+VVCMPLT        15         1C
+VSCMPLT
+
+VVCMPTEQ       15         1D
+VSCMPTEQ
+VVCMPTEQ/SU    24         96
+VSCMPTEQ/SU
+
+VVCMPTLE       15         1E
+VSCMPTLE
+VVCMPTLE/SU    24         97
+VSCMPTLE/SU
+
+VVCMPTLT       15         1F
+VSCMPTLT
+VVCMPTLT/SU    24         98
+VSCMPTLT/SU
+
+VVCMPTUN       15         20
+VSCMPTUN
+VVCMPTUN/SU    24         99
+VSCMPTUN/SU
+
+VVCMPULE       15         21
+VSCMPULE
+
+VVCMPULT       15         22
+VSCMPULT
+
+VVCMPBGE       15         23
+VSCMPBGE
+
+VSETVM         15         24
+
+VSETNVM        15         25
+
+VVAND          15         26
+VSAND
+
+VVBIS          15         27
+VSBIS
+
+VVXOR          15         28
+VSXOR
+
+VVBIC          15         29
+VSBIC
+
+VVORNOT        15         2A
+VSORNOT
+
+VVEQV          15         2B
+VSEQV
+
+VVSRA          15         2C
+VSSRA
+
+VVSLL          15         2D
+VSSLL
+
+VVSRL          15         2E
+VSSRL
+
+VCTPOP         15         2F
+
+VCTLZ          15         30
+
+VCTTZ          15         31
+
+VVINSBL        15         32
+VSINSBL
+
+VVINSWL        15         33
+VSINSWL
+
+VVINSLL        15         34
+VSINSLL
+
+VVINSQL        15         35
+VSINSQL
+
+VVINSWH        15         36
+VSINSWH
+
+VVINSLH        15         37
+VSINSLH
+
+VVINSQH        15         38
+VSINSQH
+
+VVEXTBL        15         39
+VSEXTBL
+
+VVEXTWL        15         3A
+VSEXTWL
+
+VVEXTLL        15         3B
+VSEXTLL
+
+VVEXTQL        15         3C
+VSEXTQL
+
+VVEXTWH        15         3D
+VSEXTWH
+
+VVEXTLH        15         3E
+VSEXTLH
+
+VVEXTQH        15         3F
+VSEXTQH
+
+VVMSKBL        15         40
+VSMSKBL
+
+VVMSKWL        15         41
+VSMSKWL
+
+VVMSKLL        15         42
+VSMSKLL
+
+VVMSKQL        15         43
+VSMSKQL
+
+VVMSKWH        15         44
+VSMSKWH
+
+VVMSKLH        15         45
+VSMSKLH
+
+VVMSKQH        15         46
+VSMSKQH
+
+VVZAP          15         47
+VSZAP
+
+VVZAPNOT       15         48
+VSZAPNOT
+
+VCVTTQ         15         49
+VCVTTQ/C       24	  9A
+VCVTTQ/V       24	  9B
+VCVTTQ/D       24	  9C
+VCVTTQ/M       24	  9D
+VCVTTQ/VC      24	  9E
+VCVTTQ/VD      24	  9F
+VCVTTQ/VM      24	  A0
+VCVTTQ/SV      24	  A1
+VCVTTQ/SVC     24	  A2
+VCVTTQ/SVD     24	  A3
+VCVTTQ/SVI     24	  A4
+VCVTTQ/SVM     24	  A5
+VCVTTQ/SVIC    24	  A6
+VCVTTQ/SVID    24	  A7
+VCVTTQ/SVIM    24	  A8
+
+VCVTQS         15         4A
+VCVTQS/C       24	  A9
+VCVTQS/M       24	  AA
+VCVTQS/D       24	  AB
+VCVTQS/SUI     24	  AC
+VCVTQS/SUIC    24	  AD
+VCVTQS/SUIM    24         AE
+VCVTQS/SUID    24         AF
+
+VCVTQT         15         4B
+VCVTQT/C       24	  B0
+VCVTQT/M       24	  B1
+VCVTQT/D       24	  B2
+VCVTQT/SUI     24	  B3
+VCVTQT/SUIC    24	  B4
+VCVTQT/SUIM    24         B5
+VCVTQT/SUID    24         B6
+
+VCVTST         15         4C
+VCVTST/S       24         B7
+
+VCVTTS         15         4D
+VCVTTS/C       24         B8
+VCVTTS/M       24         B9
+VCVTTS/D       24         BA
+VCVTTS/U       24         BB
+VCVTTS/UC      24         BC
+VCVTTS/UM      24         BD
+VCVTTS/UD      24         BE
+VCVTTS/SU      24         BF
+VCVTTS/SUC     24         C0
+VCVTTS/SUM     24         C1
+VCVTTS/SUD     24         C2
+VCVTTS/SUI     24         C3
+VCVTTS/SUIC    24         C4
+VCVTTS/SUIM    24         C5
+VCVTTS/SUID    24         C6
+
+VEXTSL         15         4E
+
+VEXTSH         15         4F
+
+VCMPR          15         50
+
+VIOTA          15         51
+
+VVMERG         15         52
+
+MVFVP          15         53
+
+MVTVP          15         54
+
+VSKEWH         15         55
+
+VSKEWL         15         56
+
+VGATHQ         15         57
+
+VGATHL         15         58
+
+VGATHT         15         59
+
+VGATHS         15         5A
+
+VSCATQ         15         5B
+
+VSCATL         15         5C
+
+VSCATT         15         5D
+
+VSCATS         15         5E
+
+VSMERGQ		   15		  5F
+
+VSMERGT		   15		  60
+
+VNCGATHQ       15         61
+
+VNCGATHL       15         62
+
+VNCGATHT       15         63
+
+VNCGATHS       15         64
+
+VNCSCATQ       15         65
+
+VNCSCATL       15         66
+
+VNCSCATT       15         67
+
+VNCSCATS       15         68
+
+VSYNCH         15         69
+
+/* prefetching gather/scatter */
+VGATHPF        15         6A
+
+VSCATPF        15         6B
+
+VNCGATHPF      15         6C
+
+VNCSCATPF      15         6D
+
+/* drain instructions */
+VDRAINM        15         6E
+VDRAINM        15         6F
+VDRAINM        15         70
+
+VDRAINV        15         71
+VDRAINV        15         72
+VDRAINV        15         73
+
+/* the mvfvr */
+MVFVR          15         74
+

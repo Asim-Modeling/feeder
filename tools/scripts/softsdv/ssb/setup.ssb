@@ -1,0 +1,60 @@
+//
+// Copyright (C) 2003-2006 Intel Corporation
+// 
+// This program is free software; you can redistribute it and/or
+// modify it under the terms of the GNU General Public License
+// as published by the Free Software Foundation; either version 2
+// of the License, or (at your option) any later version.
+// 
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+// 
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+// 
+
+//
+// Set up a benchmark.  Run until the start SSB event is received and save
+// a checkpoint.
+//
+
+include asim.ssb;
+	
+//
+// Detect benchmark end
+//
+callback notice_benchmark_exit for ("event.simul_app.mark" where
+                                    "data.simul_app.mark" == $asim_ssb_end)
+{
+    print('Benchmark ended!');
+    action dump_screen_text('screen_output_fail.txt');
+    action asim_end_simulation();
+    action shutdown();
+}
+
+main
+{
+    include asim_main.ssb;
+
+    //
+    // Main script in guest requests an integer telling it what to do.
+    // Returning 1 means load a workload using ssc_guest.
+    //
+    advance until_request_int(1);
+    action mark_ret(1);
+
+    advance until_benchmark_start(XXSSBSTARTCNTXX);
+    print('About to start benchmark...');
+
+    action stop_asap();
+    advance until_stopped(1);
+
+    print('Saving checkpoint to XXSAVENAMEXX');
+    action save('XXSAVENAMEXX');
+
+    action dump_screen_text('screen_output.txt');
+    action stop_asap();
+}

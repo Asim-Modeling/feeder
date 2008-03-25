@@ -1,0 +1,58 @@
+#
+#  Copyright (C) 2003-2006 Intel Corporation
+#  
+#  This program is free software; you can redistribute it and/or
+#  modify it under the terms of the GNU General Public License
+#  as published by the Free Software Foundation; either version 2
+#  of the License, or (at your option) any later version.
+#  
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#  
+#  You should have received a copy of the GNU General Public License
+#  along with this program; if not, write to the Free Software
+#  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+#  
+#
+
+[Global]
+Version=2.0
+File=feeder_synthetic
+Name=Synthetic IA64 Instruction Feeder
+Description=Synthetic IA64 Instruction Feeder
+SaveParameters=0
+
+[Model]
+DefaultAttributes=cover tang_cmp tang_inorder single_chip sched tracefeeder ipf ia64 model
+model=Instruction Feeder
+
+[Instruction Feeder]
+File=feeders/inst/instfeeder.awb
+
+[Instruction Feeder/Requires]
+instfeeder_interface=InstFeeder_BaseInterface
+instfeeder_implementation=Synthetic Feeder Requiring Controller
+
+[InstFeeder_BaseInterface]
+File=feeders/inst/interface/base/instfeederbase.awb
+
+[Synthetic Feeder Requiring Controller/Requires]
+memory_value_model=Memory Value Model
+decode_cache=IPF Decode Cache
+
+[Synthetic Feeder Requiring Controller]
+File=feeders/inst/synthetic/synthetic-feeder.awb
+
+[Memory Value Model]
+File=feeders/memory-values/memory-values.awb
+
+[IPF Decode Cache]
+File=pm/isa/ipf/ipf_decode_cache.awb
+
+[InstFeeder_BaseInterface/Requires]
+FeederPeekInfo=Feeder Peek Info
+
+[Feeder Peek Info]
+File=feeders/inst/interface/base/feederpeekinfo.awb

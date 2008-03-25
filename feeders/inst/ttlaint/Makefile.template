@@ -1,0 +1,247 @@
+#
+#  Copyright (C) 2001-2006 Intel Corporation
+#  
+#  This program is free software; you can redistribute it and/or
+#  modify it under the terms of the GNU General Public License
+#  as published by the Free Software Foundation; either version 2
+#  of the License, or (at your option) any later version.
+#  
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#  
+#  You should have received a copy of the GNU General Public License
+#  along with this program; if not, write to the Free Software
+#  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+#  
+#
+
+##########################################################################
+#
+# Aint makefile. This file is used by awb to build the Aint library.
+# This makefile is generated for:
+#   $REPLACE$PmName
+#   $REPLACE$PmDesc
+#
+# Author: Artur Klauser
+#
+##########################################################################
+
+#-----------------------------------------------------------------------------
+# set defaults for make configuration
+#-----------------------------------------------------------------------------
+GNU = $REPLACE$GNU
+OPT = $REPLACE$OPT
+DEBUG = $REPLACE$DEBUG
+STATIC = $REPLACE$STATIC
+WARN = $REPLACE$WARN
+PAR = $REPLACE$PAR
+COMMON_LFLAGS:=$REPLACE$COMMON_LFLAGS
+LOCAL_LFLAGS:=$REPLACE$LOCAL_LFLAGS
+LOCAL_CFLAGS:=$REPLACE$LOCAL_CFLAGS
+
+#-----------------------------------------------------------------------------
+# top-level make configuration
+#-----------------------------------------------------------------------------
+include $REPLACE$MAKEFILECONFIG
+
+#-----------------------------------------------------------------------------
+# includes and defines
+#-----------------------------------------------------------------------------
+ASIM_INCDIRS=$REPLACE$INCDIRS
+SRCDIR=src
+
+#-----------------------------------------------------------------------------
+# TARGET and required components
+#-----------------------------------------------------------------------------
+TARGET=$REPLACE$TARGET
+
+#-----------------------------------------------------------------------------
+# paths to sources
+#-----------------------------------------------------------------------------
+VPATH=$(SRCDIR)
+AINTDIR = $(SRCDIR)
+INCDIR = $(AINTDIR)/include
+
+#-----------------------------------------------------------------------------
+# configuration for using multiple compilers
+#-----------------------------------------------------------------------------
+OSVER = $(shell uname -r | sed -e s/[TVX]// -e s/\\.//)
+
+INCLUDES = -I$(AINTDIR) -I$(INCDIR) $(ASIM_INCDIRS) -I/usr/local/include
+DEFINES  = -DOSVER=$(OSVER) -DDEBUG_AINT=$(DEBUG) -DVERBOSE_AINT_CALLSYS \
+           $(DBGFLAGS)
+
+
+##
+## In this Makefile, three different compilers are used:
+##
+## CXX: The C++ compiler is used to compile the interface between ASIM and
+##      AINT, which is contained in file aintint.cpp
+##
+## GCC: The gcc compiler must be used in those C files where ASM inline
+##      directives have been used. These are the files that emulate the
+##      instructions being processed by AINT.
+##
+## CC : Any plain C compiler can be used for the remaining  C files in the
+##      source directory (i.e., those that do not need ASM inline directives)
+
+##
+## Files to be compiled using CXX
+##
+CXX_NAMES = aintint marker Verifier Oracle posix_thread
+CXX_OBJS := $(addsuffix .o, $(CXX_NAMES))
+CXX_OOBJS := $(addprefix obj/, $(CXX_OBJS))
+
+##
+## Files to be compiled using GCC
+##
+GCC_NAMES = op_asm fpoper newinst ttl_inst
+GCC_OBJS := $(addsuffix .o, $(GCC_NAMES))
+GCC_OOBJS := $(addprefix obj/, $(GCC_OBJS))
+
+##
+## Files to be compiled using CC (cc or gcc)
+##
+CC_NAMES  = aint_init symtab utils opcodes queue hash wheel subst ipc exec \
+            tlb loader storebuf ttl_loader 
+CC_OBJS := $(addsuffix .o, $(CC_NAMES))
+CC_OOBJS := $(addprefix obj/, $(CC_OBJS))
+
+
+## 
+## Flags pertinent to the C++ compilation rules (CXX)
+##
+CXXFLAGS := $(CFLAGS)
+
+## 
+## Flags pertinent to the GCC compilation rules (GCC)
+##
+GCC		= gcc -nostdinc -I/usr/include
+ifeq ($(GNU),1)
+   GCC_OPT		= -g
+else
+## Even with CXX/CC some files get compiled with gcc. Use -gcoff
+## for those files
+   GCC_OPT		= -gcoff
+endif
+GCC_FLAGS	= $(GCC_OPT) $(DEFINES)
+GCC_AS		= as
+GCC_AS_OPT	= 
+ifeq  ($(DEBUG),1)
+GCC_HIGH_OPT	= -DDO_INLINING
+else
+GCC_HIGH_OPT	= -O5 -finline-functions -fschedule-insns2
+endif
+
+## 
+## Flags pertinent to the C   compilation rules (CC), assuming that the 
+## user has selected a native DU compiler
+##
+ifeq ($(GNU),0)
+ CC_STD         = -migrate -std1
+ CC_STATIC	= -non_shared
+ CC_WARNS	= -w1
+ CC_OPT_FLAGS	= -O5 -fast -inline speed -g3 -D_INTRINSICS -D_INLINE_INTRINSICS
+ CC_DEBUG_FLAGS	= -O0 -g -D_PUT_ASSERTIONS
+ ifeq  ($(DEBUG),1)
+  CC_FLAGS	= $(CC_STD) $(CC_STATIC) $(CC_DEBUG_FLAGS) $(CC_WARNS) $(DEFINES)
+ else
+  CC_FLAGS	= $(CC_STD) $(CC_STATIC) $(CC_OPT_FLAGS) $(CC_WARNS) $(DEFINES)
+ endif
+endif
+
+## 
+## Flags pertinent to the C   compilation rules (CC), assuming that the 
+## user has selected a gcc compiler
+##
+## Note that, as opposed to the GCC flags above, WE ARE NOT OVERRIDING the
+## gcc standard include directories. That, is DO NOT put in the lines
+## below anything like "-nostdinc -I/usr/include" !!! If you do so, you'll end
+## up getting an 'undefined __builtin_va_start' error message in the final linking
+## phase, because gcc does not understand how the 'Tru64' :-) varargs work. -roger
+##
+ifeq ($(GNU),1)
+ CC_OPT_FLAGS	=  -O5 -finline-functions -fschedule-insns2
+ CC_DEBUG_FLAGS	= -O0 -g -D_PUT_ASSERTIONS
+ ifeq  ($(DEBUG),1)
+  CC_FLAGS	= $(CC_DEBUG_FLAGS) $(DEFINES)
+ else
+  CC_FLAGS	= $(CC_OPT_FLAGS) $(DEFINES)
+ endif
+endif
+
+
+#-----------------------------------------------------------------------------
+# build rules
+#-----------------------------------------------------------------------------
+.PHONY: all
+all : dirs $(TARGET)
+
+OOBJS = $(CXX_OOBJS) $(CC_OOBJS) $(GCC_OOBJS)
+
+$(TARGET): $(OOBJS)
+	@rm -f $(TARGET)
+	@ar rcv $@ $(OOBJS)
+
+
+##
+## All pure C files are compiled using the following rule
+##
+$(CC_OOBJS): obj/%.o: %.c
+	$(CC) $(MKDEPEND) -c $(CC_FLAGS) $(INCLUDES) -o $@ $<
+	@dfile=$(notdir $(basename $@)).d; if [ -e $$dfile ]; then mv $$dfile obj/$$dfile; fi
+	@sed -e 's/^\([^/]*\.o:\)/obj\/\1/' $(DEPEND_FILE) > .depend/$(notdir $(basename $@)).d
+	@rm -f $(DEPEND_FILE)
+
+
+##
+## All C++ files are compiled with the following rule
+##
+$(CXX_OOBJS): obj/%.o: %.cpp
+	$(CXX) $(MKDEPEND) -c -o $@ $(CXXFLAGS) $(DEFS) $(INCLUDES) $<
+	@dfile=$(notdir $(basename $@)).d; if [ -e $$dfile ]; then mv $$dfile obj/$$dfile; fi
+	@mv -f $(DEPEND_FILE) .depend/$(notdir $(basename $@)).d
+	@sed -e 's/^\([^/]*\.o:\)/obj\/\1/' $(DEPEND_FILE) > .depend/$(notdir $(basename $@)).d
+
+
+##
+## The following files contain ASSEMBLER INLINED code and, therefore must
+## be compiled using GCC (they use the GCC _asm_ macro).
+##
+$(GCC_OOBJS): obj/%.o: %.c
+	$(GCC) -MMD -S -o $(basename $@).s $(GCC_HIGH_OPT) $(GCC_FLAGS) $(INCLUDES) $<
+	@mv -f $(basename $@).d .depend/$(notdir $(basename $@)).d
+	$(GCC_AS) $(GCC_AS_OPT) -o $@ $(basename $@).s
+	rm -f $(basename $@).s
+
+#-----------------------------------------------------------------------------
+# utility rules
+#-----------------------------------------------------------------------------
+.PHONY: dirs
+dirs: .depend obj
+.depend:
+	@mkdir .depend
+obj:
+	@mkdir obj
+
+.PHONY: clean
+clean :
+	@rm -rf obj
+	@rm -rf .depend
+	@rm -rf cxx_repository
+
+.PHONY: realclean
+realclean : clean
+	rm -f $(TARGET)
+
+.PHONY: nuke
+nuke :  realclean
+	rm -rf *
+
+install:
+	
+
+# include all generated dependencies
+-include .depend/*.d

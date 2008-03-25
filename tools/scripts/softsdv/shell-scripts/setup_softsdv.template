@@ -1,0 +1,93 @@
+#!/bin/sh
+
+#
+#  Copyright (C) 2003-2006 Intel Corporation
+#  
+#  This program is free software; you can redistribute it and/or
+#  modify it under the terms of the GNU General Public License
+#  as published by the Free Software Foundation; either version 2
+#  of the License, or (at your option) any later version.
+#  
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#  
+#  You should have received a copy of the GNU General Public License
+#  along with this program; if not, write to the Free Software
+#  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+#  
+#
+
+#
+# Display SoftSDV's VGA window?  By default it is hidden
+#
+if [ "$1" = "--display" ]; then
+    if [ ! -z "$2" ]; then
+        DISPLAY=$2
+        export DISPLAY
+    fi    
+    echo "Display enabled ($DISPLAY)"
+    vga=max
+elif [ "$1" != "" ]; then
+    echo "Usage: $0 [--display [<display name>]]"
+    exit 1
+else
+    unset DISPLAY
+    echo "Display disabled"
+    vga=off
+fi
+
+rm -f softsdv/screen_output.txt softsdv/screen_output_fail.txt
+rm -f XXASIMBMNAMEXX.stats
+
+cd softsdv
+source softsdv_env.sh
+
+#
+# Make sure directory for save files exists
+#
+mkdir -p `dirname XXSAVENAMEXX`
+
+source sh/asim_init.sh
+if [ "XXRCARG_SIMPOINTXX" != "" -a ! -f XXSAVENAMEXX_tmp/pass2.region ]; then
+    echo Pass 1...
+    # Simpoint sampling -- first pass
+    XXASIMSDVARGSXX XXRCARG_SIMPOINTXX XXHDBARGSXX
+    if [ -f OUTPUT/console.log ]; then
+        mv -f OUTPUT/console.log OUTPUT/console.log.pass1
+    fi
+fi
+XXASIMSDVARGSXX XXRCARG_SETUPXX XXHDBARGSXX
+status=$?
+source sh/asim_fini.sh
+
+rm -f delta*.dlt*
+
+if [ -f screen_output_fail.txt ]; then
+    cat screen_output_fail.txt
+    echo ""
+    echo "Setup script failed!"
+    exit 1
+fi
+
+if [ -f screen_output_fail.vga ]; then
+    echo ""
+    echo "Setup script failed!"
+    exit 1
+fi
+
+if [ -f screen_output.txt ]; then
+    cp -f screen_output.txt ../XXASIMBMNAMEXX.stats
+elif [ -f screen_output.vga ]; then
+    cp -f screen_output.vga ../XXASIMBMNAMEXX.stats
+else
+    echo "Setup complete" > ../XXASIMBMNAMEXX.stats
+fi
+
+if [ $status -ne 0 ]; then
+    echo "Checkpoint setup failed."
+else
+    echo "Success!"
+fi
+exit $status

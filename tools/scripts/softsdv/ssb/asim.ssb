@@ -1,0 +1,143 @@
+//
+// Copyright (C) 2003-2006 Intel Corporation
+// 
+// This program is free software; you can redistribute it and/or
+// modify it under the terms of the GNU General Public License
+// as published by the Free Software Foundation; either version 2
+// of the License, or (at your option) any later version.
+// 
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+// 
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+// 
+
+//
+// Standard Asim SSB definitions.  Included by other scripts.
+//
+
+//
+// SSB message values from client
+//
+$asim_ssb_booted        = 32768;        // Boot complete
+$asim_ssb_start         = 32769;        // Benchmark starting
+$asim_ssb_end           = 32770;        // Benchmark ending
+$asim_ssb_req_int       = 32771;        // Client requested an integer
+$asim_ssb_req_str       = 32772;        // Client requested a string
+$asim_ssb_str_ack       = 32773;        // Client received string
+$asim_ssb_str_nack      = 32774;        // Error receiving string
+
+$asim_ssb_spin_start    = 125;          // Entering a spin loop
+$asim_ssb_spin_body     = 126;          // Once per iteration
+$asim_ssb_spin_end      = 127;          // Exiting spin loop
+
+//
+// Execute N instructions using:  advance inst(N)
+//
+iteration inst       = set_wait( "data.ge.timer.inst.100", "event.ge.timer.inst.100");
+
+//
+// Wait until booted using:  advance until_booted(1).
+// Other functions wait until benchmark starts or ends.
+//
+iteration until_booted = wait("event.simul_app.mark" where "data.simul_app.mark" == $asim_ssb_booted);
+iteration until_benchmark_start = wait("event.simul_app.mark" where "data.simul_app.mark" == $asim_ssb_start);
+iteration until_benchmark_end   = wait("event.simul_app.mark" where "data.simul_app.mark" == $asim_ssb_end);
+iteration until_request_int =  wait("event.simul_app.mark" where "data.simul_app.mark" == $asim_ssb_req_int);
+iteration until_request_str =  wait("event.simul_app.mark" where "data.simul_app.mark" == $asim_ssb_req_str);
+//
+// Wait for SscSimulAppMark or SscSimulAppMarkRet from client
+// using:  advance wait_mark(N)
+//
+iteration wait_mark  = wait("event.simul_app.mark");
+
+//
+// Get the value passed by a mark using:  action get_mark($<var>&)
+//
+action get_mark   = get_value("data.simul_app.mark");
+
+//
+// Set the return value for SscSimulAppMarkRet using:  action mark_ret(N)
+//
+action mark_ret   = set_value("data.simul_app.mark_ret");
+
+//
+// Get the PSR using:  action get_psr($<var>&)
+//
+action get_psr = get_value("data.arch.register.psr");
+
+//
+// Get the current instruction count using:  action get_icount($<var>&)
+//
+action get_icount = get_value("data.stat.i_count");
+
+//
+// Wait for an hdb breakpoint to be hit:  advance until_breakpoint(1);
+//
+iteration until_breakpoint = wait("event.debugging.code_brk");
+
+//
+// Return control to hdb:  action stop_asap()
+//
+action stop_asap  = send_event("event.debugging.control_c");
+
+//
+// Wait for stop_asap to complete:  advance until_stopped(1)
+//
+iteration until_stopped = wait("notifier.stage" == 5);
+
+//
+// Force simulator to exit:  action shutdown()
+//
+action shutdown   = send_event("event.debugging.exit_sapp");
+
+//
+// Save checkpoint:  action save(N) or save(N, T)
+//
+action save = vpc_command("vpc.srmgr save ALL f s $1");
+action save_tagged = vpc_command("vpc.srmgr save ALL f s $1_$2");
+	
+//
+// Restore checkpoint:  action restore(N) or restore(N, T)
+//
+action restore = vpc_command("vpc.srmgr restore ALL f $1");
+action restore_tagged = vpc_command("vpc.srmgr restore ALL f $1_$2");
+	
+//
+// Manage NOP mark points.  nop_triggers can be as high as 128.
+//
+action enable_nop_markers = vpc_command("vpc.cpu trans ssc_mark all");
+action disable_nop_markers = vpc_command("vpc.cpu trans ssc_mark none");
+
+//
+// Messages to ASIM CPUAPI module
+//
+action asim_start_simulation = vpc_command("vpc.cpu ext 0 1 start_simulation");
+action asim_end_simulation   = vpc_command("vpc.cpu ext 0 1 end_simulation");
+action asim_start_warmup     = vpc_command("vpc.cpu ext 0 1 start_warmup");
+action asim_end_warmup       = vpc_command("vpc.cpu ext 0 1 end_warmup");
+action asim_skipping         = vpc_command("vpc.cpu ext 0 1 skipping");
+action asim_context_info     = vpc_command("vpc.cpu ext 0 1 context_switch_info $1 $2 $3");
+action asim_timer_info       = vpc_command("vpc.cpu ext 0 1 timer_interrupt_info $1");
+action asim_idle_info        = vpc_command("vpc.cpu ext 0 1 idle_loop_tag $1");
+
+//
+// Choose execution mode (2 for performance, 4 for fast forward)
+//
+action change_mode = set_value("notifier.vpc.kernel.simul_mode");
+
+//
+// Dump screen
+//
+action dump_screen_text = vpc_command("dumper text -file=$1");
+action dump_screen_vga  = vpc_command("dumper vga -file=$1");
+
+//
+// Variable used by some scripts to refine the chosen checkpoint
+//
+$refineCheckpoint = 0;
+$refineIterations = 0;

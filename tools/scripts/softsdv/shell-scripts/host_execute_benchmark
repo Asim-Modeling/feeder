@@ -1,0 +1,52 @@
+#!/bin/sh
+
+#
+#  Copyright (C) 2006 Intel Corporation
+#  
+#  This program is free software; you can redistribute it and/or
+#  modify it under the terms of the GNU General Public License
+#  as published by the Free Software Foundation; either version 2
+#  of the License, or (at your option) any later version.
+#  
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#  
+#  You should have received a copy of the GNU General Public License
+#  along with this program; if not, write to the Free Software
+#  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+#  
+
+##
+## Execute a benchmark that has been configured for SoftSDV on the host.
+## Takes the configured benchmark directory as an argument and finds the
+## binary to execute in the softsdv/AUTO subdirectory.  Copies the results
+## to the softsdv/OUTPUT directory.
+##
+## Use this to test an application before loading it into SoftSDV.
+##
+
+if [ "$1" == "" -o ! -d "$1" ]; then
+    echo "Usage:  host_execute_benchmark <benchmark directory>"
+    exit 1
+fi
+
+if [ ! -d "$1/softsdv/AUTO" ]; then
+    echo "$1 doesn't look like a SoftSDV workload.  Can't find $1/softsdv/AUTO"
+    exit 1
+fi
+
+cd $1/softsdv/AUTO
+rm -rf ../OUTPUT
+mkdir ../OUTPUT
+rm -rf exec
+mkdir exec
+cd exec
+tar xzf ../benchmark.tar.gz
+
+bmargs=`cat ../benchmark.args`
+bmofiles=`cat ../benchmark.ofiles`
+
+eval /usr/bin/time --output=run_sec --format "%e" ../benchmark ${bmargs}
+cp -p run_sec $bmofiles ../../OUTPUT

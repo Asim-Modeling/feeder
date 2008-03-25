@@ -1,0 +1,121 @@
+#
+#  Copyright (C) 2001-2006 Intel Corporation
+#  
+#  This program is free software; you can redistribute it and/or
+#  modify it under the terms of the GNU General Public License
+#  as published by the Free Software Foundation; either version 2
+#  of the License, or (at your option) any later version.
+#  
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#  
+#  You should have received a copy of the GNU General Public License
+#  along with this program; if not, write to the Free Software
+#  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+#  
+#
+
+##########################################################################
+#
+# tracer makefile. This file is used by awb to build the tracer library.
+# This makefile is generated for:
+#   $REPLACE$PmName
+#   $REPLACE$PmDesc
+#
+# author: Artur
+#
+##########################################################################
+
+#-----------------------------------------------------------------------------
+# set defaults for make configuration
+#-----------------------------------------------------------------------------
+GNU = $REPLACE$GNU
+OPT = $REPLACE$OPT
+DEBUG = $REPLACE$DEBUG
+STATIC = $REPLACE$STATIC
+WARN = $REPLACE$WARN
+PAR = $REPLACE$PAR
+COMMON_LFLAGS:=$REPLACE$COMMON_LFLAGS
+LOCAL_LFLAGS:=$REPLACE$LOCAL_LFLAGS
+LOCAL_CFLAGS:=$REPLACE$LOCAL_CFLAGS
+
+#-----------------------------------------------------------------------------
+# top-level make configuration
+#-----------------------------------------------------------------------------
+include $REPLACE$MAKEFILECONFIG
+
+#-----------------------------------------------------------------------------
+# includes and defines
+#-----------------------------------------------------------------------------
+ASIM_INCDIR=$REPLACE$ASIMINCDIR
+FEEDDIR=$REPLACE$FEEDDIR
+
+#-----------------------------------------------------------------------------
+# TARGET and required components
+#-----------------------------------------------------------------------------
+TARGET=$REPLACE$TARGET
+
+#-----------------------------------------------------------------------------
+# paths to sources
+#-----------------------------------------------------------------------------
+VPATH=$(FEEDDIR)
+
+#-----------------------------------------------------------------------------
+# build rules
+#-----------------------------------------------------------------------------
+.PHONY: all
+all : $(TARGET)
+
+INCDIRS = -I$(FEEDDIR) $(ASIM_INCDIR)
+
+TRACER_LIB_OBJ = traceint.o
+
+$(TARGET): $(TRACER_LIB_OBJ)
+	@rm -f $(TARGET)
+	@ar rcv $@ $(TRACER_LIB_OBJ)
+
+.PHONY: atomfiles
+atomfiles: instrument.o  analysis.o 
+
+instrument.o : cflow.inst.o
+	cp -f cflow.inst.o instrument.o
+
+analysis.o : pipe.o mpipe.o
+	ld -r -o analysis.o pipe.o mpipe.o
+
+
+# generate both .o files and .d files for #include dependencies;
+# we move the .d files into a separate directory, however, for clarity;
+%.o : %.cpp
+	$(CXX) $(MKDEPEND) -c -o $@ $(CFLAGS) $(INCDIRS) $<
+	@mv -f $(DEPEND_FILE) .depend/$(basename $@).d
+%.o : %.c
+	$(CC) $(MKDEPEND) -c -o $@ $(CFLAGS) $(INCDIRS) $<
+	@mv -f $(DEPEND_FILE) .depend/$(basename $@).d
+
+
+##########################################################################
+#
+# Utility rules.
+#
+.PHONY: clean
+clean :
+	@rm -f *.o
+	@rm -f .depend/*.d
+	@rm -rf cxx_repository
+
+.PHONY: realclean
+realclean : clean
+	rm -f $(TARGET)
+
+.PHONY: nuke
+nuke :  realclean
+	rm -rf *
+
+install:
+	
+
+# include all generated dependencies
+-include .depend/*.d

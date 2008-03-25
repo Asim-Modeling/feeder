@@ -1,0 +1,14 @@
+Most files in this tree come directly from SoftSDV releases.  There are
+some exceptions.  Within in each release there are some release-specific
+files added for Asim:
+
+map_decoder_regs.h --
+    Generated automatically from decp69.h from the SoftSDV release using
+    mapregs.pl (same directory as this README file) as follows:
+
+        mapregs.pl < decp69.h > map_decoder_regs.h
+
+
+build_gcc / build_g++ --
+    The commands to invoke the C and C++ compilers.  Each SoftSDV release
+    may use a different compiler.

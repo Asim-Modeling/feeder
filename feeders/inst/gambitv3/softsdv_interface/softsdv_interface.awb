@@ -1,0 +1,47 @@
+/*
+ * Copyright (C) 2003-2006 Intel Corporation
+ * 
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ * 
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ * 
+ */
+
+/********************************************************************
+ *
+ * Awb module specification
+ *
+ *******************************************************************/
+
+
+%AWB_START
+
+%name SoftSDV Interface  
+%desc These are the functions that are compiled with softsdv and called by asim (better to stick to cpuapi calls if possible!)
+%provides softsdv_interface 
+%requires softsdv_import_include
+%attributes ia64
+%attributes gambit
+
+%public cpuapi_calls.h hdb_types.h hdb_calls.h   
+
+***                                                                  ***
+*** Build asim_softsdv_client as a side effect.  The softsdv_dummy.a ***
+*** satisfies a need in awb and the Makefiles to have a dependent    ***
+*** object built and included in the final asim link step.           ***
+***                                                                  ***
+
+%makefile Makefile.template
+%target softsdv_dummy.a
+
+%AWB_END

@@ -1,0 +1,24 @@
+This directory contains the library files for POSIX Threads running on AINT,
+and some example programs.
+
+Programs using AINT pthreads must include the file include/aint_pthread.h,
+and be linked with the object pthread.o in this directory. These programs
+cannot be run natively as they make "fake" syscalls specific to AINT.
+
+If source compatibility is desired, a sequence of preprocessor directives
+like the following can be used:
+
+  #ifdef CUSTOM_PTHREADS
+  #include "aint_pthread.h"
+  #else
+  #include <pthread.h>
+
+The list of pthreads routines currently supported is:
+
+  pthread_create
+  pthread_join
+  pthread_exit
+
+(to be updated as more functions are supported.)
+
+

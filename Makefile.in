@@ -1,0 +1,119 @@
+#
+#  Copyright (C) 2002-2006 Intel Corporation
+#  
+#  This program is free software; you can redistribute it and/or
+#  modify it under the terms of the GNU General Public License
+#  as published by the Free Software Foundation; either version 2
+#  of the License, or (at your option) any later version.
+#  
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#  
+#  You should have received a copy of the GNU General Public License
+#  along with this program; if not, write to the Free Software
+#  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+#  
+#
+
+
+# 
+# Asim core Makefile
+#
+
+package=@package@
+release=@release@
+
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+bindir=@bindir@
+mandir=@mandir@
+
+sysconfdir=@sysconfdir@
+configdir=@configdir@
+
+datadir=@datadir@
+packagedir=@packagedir@
+codedir=@codedir@
+
+top_srcdir = @top_srcdir@
+srcdir = @srcdir@
+VPATH = @srcdir@
+
+CC = @CC@
+CFLAGS = @CFLAGS@
+CPPFLAGS = @CPPFLAGS@
+LDFLAGS = @LDFLAGS@
+LIBS = @LIBS@
+
+MKINSTALLDIRS = $(SHELL) $(top_srcdir)/mkinstalldirs
+INSTALL=@INSTALL@
+INSTALL_DATA=@INSTALL@
+
+ALL_CFLAGS = $(CFLAGS) $(CPPFLAGS) -I$(srcdir) -I.
+ALL_LDFLAGS = $(CFLAGS) $(LDFLAGS) 
+
+
+configtargets=Makefile
+targets=
+
+.phony: all
+all: 
+	@echo "Done."
+
+
+
+.c.o:
+	$(CC) $(ALL_CFLAGS) -c $< -o $@
+
+
+.phony: install install-release install-src
+
+
+
+install: all install-release
+	@echo "Done."
+
+install-release: all install-src
+
+#
+# To allow multiple users of the same group install the source
+# with same group and group write permission as ${datadir}
+#
+install-src:
+	$(MKINSTALLDIRS)  ${codedir}
+	rsync -rltSx -tD --delete-excluded --exclude CVS . ${codedir}
+	chgrp --recursive asimcore ${codedir}
+	chmod -R g+w ${codedir}
+	chmod -R o-rwx ${codedir}
+
+.phony: check
+
+check:
+	@echo nothing to check
+
+
+.phony: clean distclean 
+
+clean:
+	rm -rf ${targets} *.o core *.core
+
+
+distclean: clean
+	rm -f ${configtargets}
+	rm -f config.cache config.h config.log config.status
+
+
+
+.phony: dist bindist
+
+dist: distclean
+	autoconf
+	cd .. && tar --exclude CVS -czvf asim-@package@-@release@.tar.gz asim-@package@
+
+
+bindist:
+	@echo "Don't know how to make a bindist yet"
+
+

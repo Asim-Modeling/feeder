@@ -1,0 +1,219 @@
+//
+// Copyright (C) 2004-2006 Intel Corporation
+// 
+// This program is free software; you can redistribute it and/or
+// modify it under the terms of the GNU General Public License
+// as published by the Free Software Foundation; either version 2
+// of the License, or (at your option) any later version.
+// 
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+// 
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+// 
+
+//
+// Sample a benchmark, equivalent to PinPoints.
+//
+
+include asim.ssb;
+	
+action save_region = vpc_command("vpc.srmgr save ALL f s XXSAVENAMEXX_r$1");
+
+action get_cpu = get_value("data.arch.active_cpu");
+action get_ip = get_value("data.arch.il");
+
+action set_view = set_value("notifier.view_cpu");
+
+$cpu = 0;
+$ip = 0;
+$icount_start = 0;
+$icount_end = 0;
+$icount_total = 0;
+$samples = 0;
+$sample_interval = XXSSBSMPLSIZEXX;
+$region_size = XXSSBINSTRSXX;
+$leading_skip = 0;
+$warmup_regions = 1;
+
+//
+// Track trips through spin loops for each CPU.  Wouldn't an array be nice
+// here.
+//
+$spin_p0 = 0;
+$spin_p1 = 0;
+$spin_p2 = 0;
+$spin_p3 = 0;
+$spin_p4 = 0;
+$spin_p5 = 0;
+$spin_p6 = 0;
+$spin_p7 = 0;
+
+
+// This variable gets set to 0 in asim_main.ssb on the second pass after
+// sampling regions have been chosen.
+$sampling_pass = 1;
+
+//
+// Detect a trip through a spin loop.
+//
+callback monitor_spin_loops for ("event.simul_app.mark" where
+                                 "data.simul_app.mark" == $asim_ssb_spin_body)
+{
+    //
+    // Isn't SSB pretty?  Count spins per CPU.
+    //
+    action get_cpu($cpu&);
+    if ($cpu == 0) {
+        $spin_p0 = $spin_p0 + 1;
+    }
+    if ($cpu == 1) {
+        $spin_p1 = $spin_p1 + 1;
+    }
+    if ($cpu == 2) {
+        $spin_p2 = $spin_p2 + 1;
+    }
+    if ($cpu == 3) {
+        $spin_p3 = $spin_p3 + 1;
+    }
+    if ($cpu == 4) {
+        $spin_p4 = $spin_p4 + 1;
+    }
+    if ($cpu == 5) {
+        $spin_p5 = $spin_p5 + 1;
+    }
+    if ($cpu == 6) {
+        $spin_p6 = $spin_p6 + 1;
+    }
+    if ($cpu == 7) {
+        $spin_p7 = $spin_p7 + 1;
+    }
+}
+
+//
+// Detect benchmark end
+//
+callback notice_benchmark_exit for ("event.simul_app.mark" where
+                                    "data.simul_app.mark" == $asim_ssb_end)
+{
+    print('Benchmark ended!');
+    action dump_screen_text('screen_output.txt');
+    action asim_end_simulation();
+    action shutdown();
+}
+
+//
+// Detect end of sampling region
+//
+callback notice_sample_end for ("event.simul_app.mark" where
+                                "data.simul_app.mark" == $asim_ssb_end)
+{
+    print('Sampling region end!');
+    break sample_end_trigger;
+}
+
+
+main
+{
+    include asim_main.ssb;
+
+    action enable_nop_markers();
+
+    deactivate_callback monitor_spin_loops;
+    deactivate_callback notice_sample_end;
+
+    //
+    // Main script in guest requests an integer telling it what to do.
+    // Returning 1 means load a workload using ssc_guest.
+    //
+    advance until_request_int(1);
+    action mark_ret(1);
+
+    advance until_benchmark_start(XXSSBSTARTCNTXX);
+
+    print('About to start benchmark...');
+
+    deactivate_callback notice_benchmark_exit;
+    activate_callback notice_sample_end;
+
+    action set_view(0);
+    action get_icount($icount_start&);
+
+    print('Sample interval (instrs): ', $sample_interval);
+
+    //
+    // Skip regions at the beginning on the sampling pass.  This will
+    // cause the checkpoints on the final pass to be stored too
+    // early.  The early instructions can be used to preload caches.
+    //
+    if ($sampling_pass == 1)
+    {
+        $leading_skip = $region_size / $sample_interval;
+        $leading_skip = $leading_skip * $warmup_regions;
+        print('Warm-up regions: ', $warmup_regions);
+        $samples = 0;
+        repeat max $leading_skip
+        {
+            advance inst($sample_interval);
+            print('skip', $samples);
+            $samples = $samples + 1;
+        }
+    }
+
+    activate_callback monitor_spin_loops;
+
+    $samples = 0;
+    repeat <sample_end_trigger>
+        forever
+    {
+        advance inst($sample_interval);
+        action get_cpu($cpu&);
+        action get_ip($ip&);
+        if ($sampling_pass == 1)
+        {
+            print('spin', $spin_p0, $spin_p1, $spin_p2, $spin_p3, $spin_p4, $spin_p5, $spin_p6, $spin_p7);
+            $spin_p0 = 0;
+            $spin_p1 = 0;
+            $spin_p2 = 0;
+            $spin_p3 = 0;
+            $spin_p4 = 0;
+            $spin_p5 = 0;
+            $spin_p6 = 0;
+            $spin_p7 = 0;
+
+            print('smpl', $samples, $cpu, hex($ip));
+        }
+        if ($sampling_pass == 0)
+        {
+            include setup_sample_regions.ssb;
+        }
+        $samples = $samples + 1;
+    }
+
+    deactivate_callback monitor_spin_loops;
+    deactivate_callback notice_sample_end;
+
+    action set_view(0);
+    action get_icount($icount_end&);
+    $icount_total = $icount_end - $icount_start;
+    $icount_total = $icount_total + $leading_skip;
+    print('ICount in sample region: ', $icount_total);
+    print('Total samples:           ', $samples);
+
+    //
+    // Let the program finish running so we can verify correctness in SoftSDV.
+    // There are two end markers.  One at the end of the program and one
+    // after output files are copied.
+    //
+    $asim_ssb_end = 32770;
+    advance until_benchmark_end(2);
+
+    print('Benchmark ended!');
+    action dump_screen_text('screen_output.txt');
+    action asim_end_simulation();
+    action shutdown();
+}

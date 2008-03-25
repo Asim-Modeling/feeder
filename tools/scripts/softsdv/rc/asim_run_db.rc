@@ -1,0 +1,5 @@
+include asim_main.rc nolog
+!lang perl
+use benchmark
+benchmark::run()
+quit

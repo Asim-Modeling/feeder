@@ -1,0 +1,165 @@
+//
+// Copyright (C) 2003-2006 Intel Corporation
+// 
+// This program is free software; you can redistribute it and/or
+// modify it under the terms of the GNU General Public License
+// as published by the Free Software Foundation; either version 2
+// of the License, or (at your option) any later version.
+// 
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+// 
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+// 
+
+//
+// Set up a benchmark that has regions.  After the benchmark is loaded, run
+// the regions SSB script that will save multiple checkpoints.
+//
+
+include asim.ssb;
+	
+$tmp = 0;
+$ktmp = 0;
+
+$endCount = 0;          // Used in notice_benchmark_exit
+
+//
+// Functions / variables for computing user-space and kernel-space instruction
+// counts.
+//
+action get_user_icount = get_value("data.stat.cpl.i_count.3");
+action get_kern_icount = get_value("data.stat.cpl.i_count.0");
+action get_kern_switches = get_value("data.stat.cpl.switches.0");
+
+action n_active_nop_triggers = set_value("notifier.simul_app.triggers");
+
+$baseIcount = 0;
+$baseUserIcount = 0;
+$baseKernIcount = 0;
+$baseKernSwitches = 0;
+
+
+include regions_header.ssb;
+
+//
+// Detect benchmark end
+//
+callback notice_benchmark_exit for ("event.simul_app.mark" where
+                                    "data.simul_app.mark" == $asim_ssb_end)
+{
+    print('ERROR - Benchmark ended!');
+
+    action get_icount($tmp&);
+    $tmp = $tmp - $baseIcount;
+    print('Benchmark finished after', $tmp, 'total instructions.');
+    action get_user_icount($tmp&);
+    $tmp = $tmp - $baseUserIcount;
+    print('Benchmark finished after', $tmp, 'user-mode instructions.');
+
+    action dump_screen_text('screen_output_fail.txt');
+
+    //
+    // The first time the end mark is seen the benchmark has just exited.
+    // Keep going so the script running in the guest can copy the output
+    // files to the host.  The second time the end mark is seen the files
+    // have been copied.  Force a shutdown.
+    //
+    $endCount = $endCount + 1;
+
+    if ($endCount == 1)
+    {
+        include regions_error.ssb;
+
+        action n_active_nop_triggers(0);
+        action disable_nop_markers();
+    }
+
+    if ($endCount == 2)
+    {
+        action asim_end_simulation();
+        action shutdown();
+    }
+}
+
+main
+{
+    include asim_main.ssb;
+
+    advance until_benchmark_start(XXSSBSTARTCNTXX);
+    action get_icount($tmp&);
+    action stop_asap();
+    advance until_stopped(1);
+
+    print('Waiting for breakpoint at start of benchmark...');
+    advance until_breakpoint(1);
+
+    action stop_asap();
+    advance until_stopped(1);
+
+    action get_icount($baseIcount&);
+    action get_user_icount($baseUserIcount&);
+    action get_kern_icount($baseKernIcount&);
+
+    $tmp = $baseIcount - $tmp;
+    print('Breakpoint reached after', $tmp, 'instructions.  Program has begun...');
+
+    //
+    // Turn on NOP triggers
+    //
+    action n_active_nop_triggers(128);
+    action enable_nop_markers();
+
+    //
+    // Generate region checkpoints
+    //
+    include regions.ssb;
+
+    print('Done with regions.  Waiting for benchmark to end for verification...');
+    deactivate_callback notice_benchmark_exit;
+    advance until_benchmark_end(1);
+
+    //
+    // Reached the benchmark end
+    //
+    action get_icount($tmp&);
+    $tmp = $tmp - $baseIcount;
+    print('Benchmark finished after', $tmp, 'instructions.');
+
+    //
+    action get_user_icount($tmp&);
+    $tmp = $tmp - $baseUserIcount;
+    print('Total user-mode instructions:          ', $tmp);
+    print('Expected user-mode instructions:       ', XXPREDICTED_INSTR_COUNTXX);
+    $tmp = $tmp - XXPREDICTED_INSTR_COUNTXX;
+    print('Difference between real and expected:  ', $tmp);
+    action get_kern_icount($tmp&);
+    $ktmp = $tmp - $baseKernIcount;
+    print('Total kernel instructions:             ', $ktmp);
+    action get_kern_switches($tmp&);
+    $tmp = $tmp - $baseKernSwitches;
+    print('Total kernel traps:                    ', $tmp);
+    $tmp = $ktmp / $tmp;
+    print('Mean kernel instructions per trap:     ', $tmp);
+
+    //
+    // Disable NOP markers and triggers
+    //
+    action n_active_nop_triggers(0);
+    action disable_nop_markers();
+
+    //
+    // Wait for one more end message sent after the output files are copied
+    //
+    print('Waiting for output files to be copied...');
+    advance until_benchmark_end(1);
+
+    print('Done.');
+
+    action dump_screen_text('screen_output.txt');
+    action stop_asap();
+}

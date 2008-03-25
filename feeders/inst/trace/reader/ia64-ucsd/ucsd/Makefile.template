@@ -1,0 +1,117 @@
+#
+#  Copyright (C) 2002-2006 Intel Corporation
+#  
+#  This program is free software; you can redistribute it and/or
+#  modify it under the terms of the GNU General Public License
+#  as published by the Free Software Foundation; either version 2
+#  of the License, or (at your option) any later version.
+#  
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#  
+#  You should have received a copy of the GNU General Public License
+#  along with this program; if not, write to the Free Software
+#  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+#  
+#
+
+##########################################################################
+#
+# UCSD PTrace Low-level libraries makefile. This file is used by AWB to
+# build the UCSD PTrace libraries.
+# This makefile is generated for:
+#   $REPLACE$PmName
+#   $REPLACE$PmDesc
+#
+# Author: Artur Klauser
+#
+##########################################################################
+
+#-----------------------------------------------------------------------------
+# set defaults for make configuration
+#-----------------------------------------------------------------------------
+GNU = $REPLACE$GNU
+OPT = $REPLACE$OPT
+DEBUG = $REPLACE$DEBUG
+STATIC = $REPLACE$STATIC
+WARN = $REPLACE$WARN
+PAR = $REPLACE$PAR
+COMMON_LFLAGS:=$REPLACE$COMMON_LFLAGS
+LOCAL_LFLAGS:=$REPLACE$LOCAL_LFLAGS
+LOCAL_CFLAGS:=$REPLACE$LOCAL_CFLAGS
+
+#-----------------------------------------------------------------------------
+# top-level make configuration
+#-----------------------------------------------------------------------------
+include $REPLACE$MAKEFILECONFIG
+
+#-----------------------------------------------------------------------------
+# TARGET and required components
+#-----------------------------------------------------------------------------
+TARGET=$REPLACE$TARGET
+
+# find precompiled libraries for UCSD PTrace infrastructure
+UCSD_LIBDIR := ~/lib/ucsd-ptrace \
+               /p/asim/i386_linux24/lib/ucsd-ptrace
+# note: this is dynamically evaluated on demand
+UCSD_LIB = $(firstword $(foreach dir, $(UCSD_LIBDIR), $(wildcard $(dir)/$@)))
+
+#-----------------------------------------------------------------------------
+# build rules
+#-----------------------------------------------------------------------------
+.PHONY: all
+all : dirs $(TARGET)
+
+$(TARGET) : checks
+	@rm -f $@
+	@if [ -z "$(UCSD_LIB)" ]; then \
+          echo; \
+          echo "ERROR: can't find library $@"; \
+          echo "       in any UCSD PTrace directory: $(UCSD_LIBDIR)'"; \
+          echo; \
+          exit 1; \
+        fi
+	@ln -s $(UCSD_LIB) $@
+
+.PHONY: checks
+checks :
+	@case $(HOSTMACHINE) in \
+          (i[3456]86) exit 0 ;; \
+          (*)    echo; \
+                 echo "ERROR: UCSD PTrace low-level libraries only supported on x86"; \
+                 echo; \
+                 exit 1 ;; \
+         esac
+	@
+
+#-----------------------------------------------------------------------------
+# utility rules
+#-----------------------------------------------------------------------------
+.PHONY: dirs
+dirs: .depend obj
+.depend obj:
+	@mkdir $@
+
+.PHONY: clean
+clean :
+	rm -rf obj dox .depend cxx_repository
+
+.PHONY: realclean
+realclean : clean
+	rm -f $(TARGET)
+
+.PHONY: nuke
+nuke :  realclean
+	rm -rf *
+
+install:
+	
+
+#-----------------------------------------------------------------------------
+# include all generated dependencies (unless *clean* goal)
+#-----------------------------------------------------------------------------
+ifneq ($(findstring clean, $(MAKECMDGOALS)), clean)
+-include .depend/*.d
+endif

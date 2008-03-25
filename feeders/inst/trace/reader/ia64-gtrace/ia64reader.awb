@@ -1,0 +1,47 @@
+/*
+ * Copyright (C) 2001-2006 Intel Corporation
+ * 
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ * 
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ * 
+ */
+
+/********************************************************************
+ *
+ * Awb module specification
+ *
+ *******************************************************************/
+
+/*
+ * %AWB_START
+ *
+ * %name IA64GTraceReader
+ * %desc IA64 GTrace (Gambit) Trace Format Reader for Trace Feeder
+ * %attributes ia64
+ * %attributes gtrace
+ * %provides tracereader
+ * %public  ia64reader.h
+ * %private ia64reader.cpp
+ *
+ * ----- Matt Reilly's IA64 Ciardi reader code base (adapted) -----
+ * %private ia64ciardi.cpp ia64ciardi.h
+ * %private ia64ciardibundle.h
+ * %private common_ge_token.h trans_GEcodes.cpp trans_GEcodes.h
+ * ----- from achebe (adapted) -----
+ * %private bits.h
+ *
+ * %param %dynamic N_TRACE_WARMUP_INSTRS 0 "Number of leading instructions to use for warm-up before the full model runs"
+ *
+ * %AWB_END
+ */

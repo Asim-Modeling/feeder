@@ -1,0 +1,3 @@
+#define BENCHMARK_RUN
+
+#include vpccfg_user.rc

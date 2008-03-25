@@ -1,0 +1,72 @@
+#
+#  Copyright (C) 2002-2006 Intel Corporation
+#  
+#  This program is free software; you can redistribute it and/or
+#  modify it under the terms of the GNU General Public License
+#  as published by the Free Software Foundation; either version 2
+#  of the License, or (at your option) any later version.
+#  
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#  
+#  You should have received a copy of the GNU General Public License
+#  along with this program; if not, write to the Free Software
+#  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+#  
+#
+
+[Global]
+Version=2.0
+File=feeder_gtrace
+Name=Gtrace IA64 Instruction Feeder
+Description=Gtrace IA64 Instruction Feeder
+SaveParameters=0
+
+[Model]
+DefaultAttributes=cover tang_cmp tang_inorder single_chip sched tracefeeder gtrace ipf ia64 model
+model=Instruction Feeder
+
+[Instruction Feeder]
+File=feeders/inst/instfeeder.awb
+
+[Instruction Feeder/Requires]
+instfeeder_interface=InstFeeder_BaseInterface
+instfeeder_implementation=TraceFeeder
+
+[TraceFeeder]
+File=feeders/inst/trace/tracefeeder.awb
+
+[TraceFeeder/Requires]
+traceinstruction=IA64TraceInst
+tracereader=IA64GTraceReader
+traceconverter=IA64Converter
+addrtranslator=AddressTranslator
+
+[IA64TraceInst]
+File=feeders/inst/trace/instruction/ia64/ia64traceinst.awb
+
+[IA64GTraceReader]
+File=feeders/inst/trace/reader/ia64-gtrace/ia64reader.awb
+
+[IA64Converter]
+File=feeders/inst/trace/converter/ia64/ia64converter.awb
+
+[AddressTranslator]
+File=feeders/inst/trace/addrtrans/pagecoloring.awb
+
+[InstFeeder_BaseInterface]
+File=feeders/inst/interface/base/instfeederbase.awb
+
+[IPF Decode Cache]
+File=pm/isa/ipf/ipf_decode_cache.awb
+
+[IA64Converter/Requires]
+decode_cache=IPF Decode Cache
+
+[InstFeeder_BaseInterface/Requires]
+FeederPeekInfo=Feeder Peek Info
+
+[Feeder Peek Info]
+File=feeders/inst/interface/base/feederpeekinfo.awb

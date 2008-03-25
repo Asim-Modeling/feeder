@@ -1,0 +1,5 @@
+obj notifier.vpc.kernel.simul_mode = 2
+@vpc.cpu ext 0 1 start_simulation
+c
+@vpc.cpu ext 0 1 end_simulation
+exit

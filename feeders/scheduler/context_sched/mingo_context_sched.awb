@@ -1,0 +1,46 @@
+/*
+ * Copyright (C) 2002-2006 Intel Corporation
+ * 
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ * 
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ * 
+ */
+
+/********************************************************************
+ *
+ * Awb module specification
+ *
+ *******************************************************************/
+
+/*
+ * %AWB_START
+ *
+ * %name Context Scheduler for Mingo
+ * %desc Context Scheduler for Mingo
+ * %attributes
+ * %provides context_scheduler
+ * %requires software_context instfeeder
+ * %public mingo_context_sched.h
+ * %private mingo_context_sched.cpp
+ *
+ * %param MAX_NUM_SWCS 100 "Maximum number of software contexts"
+ * %param CHECK_RUNNABLE 10 "Cycles between calls to Mingo's GetNextSoftwareThreadEvent"
+ * %param CHECK_NEW_STREAM 5 "Cycles between calls to Mingo's CheckForNewSoftwareThread"
+ * %param CHECK_EXIT 100 "Cycles between calls to Mingo's EndOfData"
+ * %param INTERVAL_TIMER 10000 "Cycles between involuntary reschedules" 
+ * %param %dynamic CYCLES_PER_PICOSECOND 2200 "Number of cycles per picosecond"
+ *
+ *
+ * %AWB_END
+ */

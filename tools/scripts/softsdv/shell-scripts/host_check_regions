@@ -1,0 +1,76 @@
+#!/bin/sh
+
+#
+#  Copyright (C) 2006 Intel Corporation
+#  
+#  This program is free software; you can redistribute it and/or
+#  modify it under the terms of the GNU General Public License
+#  as published by the Free Software Foundation; either version 2
+#  of the License, or (at your option) any later version.
+#  
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#  
+#  You should have received a copy of the GNU General Public License
+#  along with this program; if not, write to the Free Software
+#  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+#  
+#
+# The source code contained or described herein and all documents related to the source code
+# ("Material") are owned by Intel Corporation or its suppliers or licensors. Title to the
+# Material remains with Intel Corporation or its suppliers and licensors. The Material may
+# contain trade secrets and proprietary and confidential information of Intel Corporation and
+# its suppliers and licensors, and is protected by worldwide copyright and trade secret laws
+# and treaty provisions. No part of the Material may be used, copied, reproduced, modified,
+# published, uploaded, posted, transmitted, distributed, or disclosed in any way without
+# Intels prior express written permission.
+#
+#
+
+##
+## Make sure that the checkpoints for a multi-region workload all exist.
+##
+
+if [ "$1" == "" -o ! -d "$1" ]; then
+    echo "Usage:  host_check_regions <benchmark directory>"
+    exit 1
+fi
+
+mainrc="$1/softsdv/asim_main.rc"
+
+if [ ! -f "${mainrc}" ]; then
+    echo "$1 doesn't look like a SoftSDV workload.  Can't find ${mainrc}"
+    exit 1
+fi
+
+run_loads_image=`grep run_loads_image $mainrc | sed 's/.* = \(.*\);/\1/'`
+if [ $run_loads_image != 0 ]; then
+    echo "$1 doesn't use checkpoints."
+    exit 1
+fi
+
+echo -n "$1 -- "
+
+save_name=`grep \'save_name $mainrc | sed 's/.* = \(.*\);/\1/' | sed "s/'//g" | sed 's/_r[0-9][0-9]*//'`
+if [ ! -f "${1}/softsdv/${save_name}.pp" ]; then
+    echo "*** No PP file ***"
+    exit 1
+fi
+
+nregions=`grep ^N ${1}/softsdv/${save_name}.pp | sed 's/N //'`
+nmissing=0
+i=1
+while [ $i -le $nregions ]; do
+    if [ ! -f "${1}/softsdv/${save_name}_r${i}.bwa" ]; then
+        nmissing=`expr $nmissing + 1`
+    fi
+    i=`expr $i + 1`
+done
+
+if [ $nmissing -gt 0 ]; then
+    echo "$nregions regions, *** $nmissing missing ***"
+else
+    echo "$nregions regions"
+fi

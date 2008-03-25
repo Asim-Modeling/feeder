@@ -1,0 +1,80 @@
+//
+// Copyright (C) 2003-2006 Intel Corporation
+// 
+// This program is free software; you can redistribute it and/or
+// modify it under the terms of the GNU General Public License
+// as published by the Free Software Foundation; either version 2
+// of the License, or (at your option) any later version.
+// 
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+// 
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+// 
+
+//
+// Basic run script.  Switch to performance mode and run one group of
+// instructions.
+//
+
+include asim.ssb;
+
+action get_cpu = get_value("data.arch.active_cpu");
+action get_ip = get_value("data.arch.il");
+	
+$cpu = 0;
+$ip = 0;
+$warmup = XXWARMUPSMPLSXX;
+
+//
+// Detect benchmark end
+//
+callback notice_benchmark_exit for ("event.simul_app.mark" where
+                                    "data.simul_app.mark" == $asim_ssb_end)
+{
+    print('Benchmark reached program end!');
+
+    action asim_end_simulation();
+    action stop_asap();
+}
+
+main
+{
+    include asim_main.ssb;
+
+    action change_mode(2);
+
+    if ($warmup > 0) {
+        print('Warming up caches...');
+        action asim_start_warmup();
+
+        repeat max $warmup
+        {
+            advance inst(XXWARMUPINTERVALXX);
+        }
+
+        action stop_asap();
+        advance until_stopped(1);
+        action asim_end_warmup();
+    }
+
+    print('Running in performance mode for XXSSBINSTRSXX instructions...');
+
+    action get_cpu($cpu&);
+    action get_ip($ip&);
+    print('Starting on CPU', $cpu, 'at', hex($ip));
+
+    action asim_start_simulation();
+    advance inst(XXSSBINSTRSXX);
+
+    print('SSB ending simulation after XXSSBINSTRSXX instructions...');
+
+    action asim_end_simulation();
+
+    action stop_asap();
+    advance until_stopped(1);
+}

@@ -1,0 +1,119 @@
+#!/bin/sh
+
+#
+#  Copyright (C) 2003-2006 Intel Corporation
+#  
+#  This program is free software; you can redistribute it and/or
+#  modify it under the terms of the GNU General Public License
+#  as published by the Free Software Foundation; either version 2
+#  of the License, or (at your option) any later version.
+#  
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#  
+#  You should have received a copy of the GNU General Public License
+#  along with this program; if not, write to the Free Software
+#  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+#  
+#
+
+##############################################################
+#
+# Benchmark exec script
+#
+# Script to run benchmark. The following variables will be
+# defined when this script is run.
+#
+# model
+# genFlags
+# sysFlags
+# feedFlags
+# 
+##############################################################
+
+##
+## /bin/sh lacks a pop function to remove a positional parameter
+##
+pop() { 
+    p=$1
+    shift
+    n=1
+    while [ $n -le $# ]; do
+        if [ $n -ne $p ]; then
+            eval echo \$$n
+        fi
+        n=$(($n + 1))
+    done
+}
+
+
+vga=off
+gdb=0
+
+##
+## Walk the argument list looking for special arguments to SoftSDV
+##
+i=1
+while [ $i -le $# ]; do
+    arg=${*:$i:1}
+    if [ "$arg" = "--warmrun" -o "$arg" = "-warmrun" ]; then
+        set -- `pop $i "$@"`
+        WARMUP_RUN_INSTRS=${*:$i:1}
+        export WARMUP_RUN_INSTRS
+
+        check=${WARMUP_RUN_INSTRS//[0-9]/}
+        if [ "$check" != "" ]; then
+            echo "Illegal argument to --warmrun:  $WARMUP_RUN_INSTRS"
+            exit 1
+        fi
+
+        echo "Limiting warm-up to $WARMUP_RUN_INSTRS cycles"
+        echo ""
+        set -- `pop $i "$@"`
+    elif [ "$arg" = "--display" ]; then
+        set -- `pop $i "$@"`
+        nxtArg=`echo ${*:$i:1} | colrm 2`
+        if [ "$nxtArg" != "" -a "$nxtArg" != "-" ]; then
+            DISPLAY=${*:$i:1}
+            set -- `pop $i "$@"`
+        fi
+        echo "Display enabled ($DISPLAY)"
+        vga=max
+    elif [ "$arg" = "--gdb" ]; then
+        set -- `pop $i "$@"`
+        gdb=1
+    else
+        i=$(($i + 1))
+    fi
+done
+
+
+##
+## Set up SoftSDV environment
+##
+cd softsdv
+source softsdv_env.sh
+source sh/asim_init.sh
+cd ..
+
+
+##
+## Run Asim and SoftSDV
+##
+sdvargs="XXASIMSDVARGSXX XXRCARG_RUNXX XXHDBARGSXX"
+cmd="$genFlags XXREGIONWEIGHTXX --feeder $sdvargs XXASIMSDVWRKARGSXX --system $sysFlags"
+if [ $gdb -eq 0 ]; then
+    $model $cmd
+else
+    gdb --silent -args $model $cmd
+fi
+
+##
+## Clean up
+##
+cd softsdv
+source sh/asim_fini.sh
+rm -f delta*.dlt*
+cd ..

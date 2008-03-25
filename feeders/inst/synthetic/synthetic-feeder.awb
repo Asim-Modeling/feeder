@@ -1,0 +1,113 @@
+/*
+ * Copyright (C) 2003-2006 Intel Corporation
+ * 
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ * 
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ * 
+ */
+
+******************************************************************
+
+Awb module specification
+
+*****************************************************************/
+
+
+%AWB_START
+
+%name Synthetic Feeder Requiring Controller
+%desc Synthetic Feeder Requiring Controller
+%attributes synthetic  ia64
+%provides instfeeder_implementation
+%requires memory_value_model decode_cache
+%public  synthetic-feeder.h 
+%private synthetic-feeder-int.cpp status-array.h status-array.cpp genable-inst.cpp genable-inst.h reg-file.h reg-provider.h reg-writers.h synth-ipf-pc.h synth-thread.cpp synth-thread.h synth-debug.h synth-debug.cpp synth-types.h synth-types.cpp value-history.h synth-util.cpp synth-util.h synth-events.h synth-routine.h synth-memop.h ipf-bundle-builder.h ipf-bundle-builder.cpp synth-inst.h synth-thread-mgmt.h synth-thread-mgmt.cpp synth-headers.h synth-params.h synth-params.cpp
+
+
+%param %dynamic SYNTH_PRINT              0 "1==Print input stream, 0==silent"
+
+%param %dynamic SYNTH_THREADS            8 "Number of threads"
+
+
+%param %dynamic SYNTH_SHARING_PCT        "0" "0==no sharing, 100==all sharing. Uses SYNTH_HISTORY_SIZE for values."
+
+%param %dynamic SYNTH_POINTER_CHASING    "0" "0==no pointer chasing, 1==all pointer chasing (for loads only)"
+
+%param %dynamic SYNTH_DEPENDS_ON_LOAD    "0" "0-100, 0==depenent ops for any loads, 100=always a dependent for load"
+%param %dynamic SYNTH_DEPENDENT_RANGE_START  "2" "number of bundles before a dependent operation is inserted -- start of range"
+%param %dynamic SYNTH_DEPENDENT_RANGE_STOP   "4" "number of bundles before a dependent operation is inserted -- end of range"
+
+
+/* TWD uses 49 bit physical addresses. Larger messes up the hash */
+%param %dynamic SYNTH_CODE_SPACE         49 "values (1..64) to limit code space to (2^SYNTH_CODE_SPACE) bytes"
+%param %dynamic SYNTH_DATA_SPACE         49 "values (1..64) to limit data space to (2^SYNTH_DATA_SPACE) bytes"
+
+%param %dynamic SYNTH_DATA_OFFSET        "0" "Origin for all data addresses in data address space"
+
+
+%param %dynamic SYNTH_LOCALITY           "0" "Range:0..100. 0=no locality, 100=only locality"
+%param %dynamic SYNTH_HISTORY_SIZE       "32" "Must be power of 2. For rememberingaddresses to re-reference"
+
+%param %dynamic SYNTH_LOAD_PCT         "100" "Range:0..100 Percent of memops that are loads"
+%param %dynamic SYNTH_ATOMIC_PCT        "0"   "Range:0..100 Percent of memops that are atomic operations"
+
+%param %dynamic SYNTH_ACQUIRE_PCT        "0"  "Range:0..100 Percent of memops that are acquire operations"
+%param %dynamic SYNTH_RELEASE_PCT        "0"   "Range:0..100 Percent of memops that are release operations"
+%param %dynamic SYNTH_LFETCH_HINT        "NONE" "Values: NONE, NT1, NT2 or NTA. Locality hint"
+
+%param %dynamic SYNTH_FIXED_SPACING      "1" "1=fixed spacing by SYNTH_LOAD_FREQUENCY, 0=use random threshold"
+%param %dynamic SYNTH_RANDOM_THRESHOLD   "5" "Percent of stream that are memops when SYNTH_FIXED_SPACING==0"
+%param %dynamic SYNTH_MEMOP_FREQUENCY     "1" "Do a memop every N bundles (when SYNTH_FIXED_SPACING==1)"
+
+%param %dynamic SYNTH_DATA_PATTERN       "0" "0=Random, 1=Stride"
+%param %dynamic SYNTH_DATA_STRIDE       "64" "Bytes between memop addresses when using stride"
+%param %dynamic SYNTH_FIXED_SIZE_REFS    "8" "[01248] bytes. 0 implies use random sizes"
+
+%param %dynamic SYNTH_DATA_ALIGNMENT    "64" "Data reference alignment, in bytes"
+
+
+%param %dynamic SYNTH_BRANCH_OFF_PATH_PCT      "0" "Percent of time we branch out of non-leaf routines. 0 implies we never branch off path."
+%param %dynamic SYNTH_BRANCH_BUNDLE_IN_ROUTINE "4"  "Which bundle of non-leaf routines has branch"
+%param %dynamic SYNTH_ROUTINE_OFFSET        "16384" "Byte offset of second routine relative to first routine in the virtual address space"
+%param %dynamic SYNTH_STATIC_SYLLABLES_PER_ROUTINE     "300" "Number of static syllables per routine"
+%param %dynamic SYNTH_DYNAMIC_SYLLABLES_PER_ROUTINE   "1000" "Number of dynamic syllables per routine"
+
+/* Syllable Vocabulary 
+   M = Loads/Stores/Exchanges -- based on above parameters
+   L = Loads
+   S = Stores
+   E = Exchange
+   F = FMA
+   N = NOP
+   X = XOR
+ */
+%param %dynamic SYNTH_MEMOP_BUNDLE "MNX" "Memop bundles: 3 syllable specifiers"
+%param %dynamic SYNTH_EVEN_BUNDLE  "NXX" "Even Filler bundles: 3 syllable specifiers"
+%param %dynamic SYNTH_ODD_BUNDLE   "NNX" "Odd Filler bundles: 3 syllable specifiers"
+
+
+%param %dynamic SYNTH_SELF_SEED          0 "Use SYNTH_SEED when SYNTH_SELF_SEED==0, Self-seed when ==1"
+%param %dynamic SYNTH_SEED               1 "User-supplied random stream seed"
+
+%param %dynamic SYNTH_SYNCHRONIZATION       "0" "0=normal synthetic feeder operation, 1=canned locking experiment (EXPERIMENTAL)"
+%param %dynamic SYNTH_SYNCH_HOLD_DELAY     "10" "How many bundles of delay while holding the lock"
+%param %dynamic SYNTH_SYNCH_RETRY_DELAY   "100" "How many bundles of delay before trying to get the lock again after releasing it"
+
+%param %dynamic SYNTH_NUM_INS_TO_COMMIT "0" "Number of instructions to commit for each thread. 0 if it does not matter"
+
+%param %dynamic SYNTH_WARMUP_INSTR 0 "Warm-up instructions"
+%param %dynamic SYNTH_WARMUP_STRIDE 64 "Warm-up stride"
+%param %dynamic SYNTH_WARMUP_INITIAL_ADDR 0 "Warm-up initial address"
+
+%AWB_END

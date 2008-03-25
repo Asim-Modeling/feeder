@@ -1,0 +1,39 @@
+/*
+ * Copyright (C) 2004-2006 Intel Corporation
+ * 
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ * 
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ * 
+ */
+
+******************************************************************
+*
+* SoftSDV feeder for IPF instructions.
+*
+******************************************************************
+
+
+%AWB_START
+
+%name SoftSDV IPF Feeder
+%desc SoftSDV IPF Feeder
+%attributes softsdv ia64
+%provides instfeeder_implementation
+%requires softsdv_feeder decode_cache
+%public softsdv_feeder_ipf.h
+%private softsdv_feeder_ipf.cpp
+
+%param %dynamic SOFTSDV_MONITOR_DMA_TRAFFIC 0 "Swizzle virtual to physical memory mapping to simulate the impact of DMA traffic."
+
+%AWB_END

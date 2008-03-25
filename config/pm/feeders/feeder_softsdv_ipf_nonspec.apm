@@ -1,0 +1,88 @@
+#
+#  Copyright (C) 2003-2006 Intel Corporation
+#  
+#  This program is free software; you can redistribute it and/or
+#  modify it under the terms of the GNU General Public License
+#  as published by the Free Software Foundation; either version 2
+#  of the License, or (at your option) any later version.
+#  
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#  
+#  You should have received a copy of the GNU General Public License
+#  along with this program; if not, write to the Free Software
+#  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+#  
+#
+
+[Global]
+Version=2.0
+File=feeder_softsdv_ipf_nonspec
+Name=SoftSDV IPF Non-Speculative Instruction Feeder
+Description=SoftSDV IPF Non-Speculative Instruction Feeder
+SaveParameters=0
+
+[Model]
+DefaultAttributes=softsdv ia64
+model=Instruction Feeder
+
+[Instruction Feeder]
+File=feeders/inst/instfeeder.awb
+
+[Instruction Feeder/Requires]
+instfeeder_interface=InstFeeder_BaseInterface
+instfeeder_implementation=SoftSDV IPF Feeder
+
+[InstFeeder_BaseInterface]
+File=feeders/inst/interface/base/instfeederbase.awb
+
+[SoftSDV IPF Stub Components]
+File=feeders/inst/softsdv/asim_softsdv_stub/softsdv_stub_ipf.awb
+
+[SoftSDV IPF Feeder/Requires]
+softsdv_feeder=SoftSDV Feeder
+decode_cache=IPF Decode Cache
+
+[SoftSDV IPF Feeder]
+File=feeders/inst/softsdv/arch_ipf/softsdv_feeder_ipf.awb
+
+[SoftSDV Process Stub]
+File=feeders/inst/softsdv/asim_softsdv_stub/softsdv_stub.awb
+
+[SoftSDV Process Stub/Requires]
+softsdv_stub_isa=SoftSDV IPF Stub Components
+softsdv_cpuapi=SoftSDV CPUAPI Module
+
+[SoftSDV IPF Data]
+File=feeders/inst/softsdv/arch_ipf/softsdv_data_ipf.awb
+
+[AddressTranslator]
+File=feeders/inst/trace/addrtrans/pagecoloring.awb
+
+[SoftSDV Feeder/Requires]
+addrtranslator=AddressTranslator
+softsdv_stub=SoftSDV Process Stub
+softsdv_isa_data=SoftSDV IPF Data
+
+[SoftSDV Feeder]
+File=feeders/inst/softsdv/softsdv_feeder.awb
+
+[IPF Decode Cache]
+File=pm/isa/ipf/ipf_decode_cache.awb
+
+[SoftSDV IPF CPUAPI Module]
+File=feeders/inst/softsdv/asim_softsdv_stub/arch_ipf/cpuapi_ipf.awb
+
+[SoftSDV CPUAPI Module/Requires]
+softsdv_cpuapi_isa=SoftSDV IPF CPUAPI Module
+
+[SoftSDV CPUAPI Module]
+File=feeders/inst/softsdv/asim_softsdv_stub/cpuapi.awb
+
+[InstFeeder_BaseInterface/Requires]
+FeederPeekInfo=Feeder Peek Info
+
+[Feeder Peek Info]
+File=feeders/inst/interface/base/feederpeekinfo.awb

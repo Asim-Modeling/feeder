@@ -1,0 +1,43 @@
+/*
+ * Copyright (C) 2003-2006 Intel Corporation
+ * 
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ * 
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ * 
+ */
+
+******************************************************************
+*
+* SoftSDV ISA independent feeder components.
+*
+******************************************************************
+
+%AWB_START
+
+%name SoftSDV Feeder
+%desc SoftSDV Feeder
+%attributes softsdv
+%provides softsdv_feeder
+%requires softsdv_isa_data softsdv_stub addrtranslator
+%public softsdv_feeder.h
+%private softsdv_feeder.cpp
+%private softsdv_replay.h softsdv_replay.cpp
+%private softsdv_itranslate.h softsdv_itranslate.cpp
+%private softsdv_data.h
+
+%param %dynamic SOFTSDV_REGISTER_VALUES 0 "Capture each instruction's input and output register values if non-zero."
+%param %dynamic SOFTSDV_MEMORY_VALUES 0   "Capture cache lines to which memory instructions refer (after execution)."
+%param %dynamic SOFTSDV_NO_DATA_SHARING 0 "Disable cross-CPU data sharing if non-zero."
+
+%AWB_END

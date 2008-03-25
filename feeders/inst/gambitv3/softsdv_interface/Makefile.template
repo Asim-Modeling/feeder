@@ -1,0 +1,153 @@
+#
+#  Copyright (C) 2003-2006 Intel Corporation
+#  
+#  This program is free software; you can redistribute it and/or
+#  modify it under the terms of the GNU General Public License
+#  as published by the Free Software Foundation; either version 2
+#  of the License, or (at your option) any later version.
+#  
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#  
+#  You should have received a copy of the GNU General Public License
+#  along with this program; if not, write to the Free Software
+#  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+#  
+#
+
+##########################################################################
+#
+# Makefile for populating the softsdv directory at the top level of the
+# build with client side libraries to be loaded into the softsdv process.
+# The client side code is built here because it must be kept in sync with
+# the Asim side of the interface.
+#
+# This makefile is generated for:
+#   $REPLACE$PmName
+#   $REPLACE$PmDesc
+#
+# Author: Michael Adler
+#
+##########################################################################
+
+#-----------------------------------------------------------------------------
+# set defaults for make configuration
+#-----------------------------------------------------------------------------
+GNU = $REPLACE$GNU
+OPT = $REPLACE$OPT
+DEBUG = $REPLACE$DEBUG
+STATIC = $REPLACE$STATIC
+WARN = $REPLACE$WARN
+PAR = $REPLACE$PAR
+COMMON_LFLAGS:=$REPLACE$COMMON_LFLAGS
+LOCAL_LFLAGS:=$REPLACE$LOCAL_LFLAGS
+LOCAL_CFLAGS:=$REPLACE$LOCAL_CFLAGS
+
+#-----------------------------------------------------------------------------
+# top-level make configuration
+#-----------------------------------------------------------------------------
+include $REPLACE$MAKEFILECONFIG
+
+#-----------------------------------------------------------------------------
+# includes and defines
+#-----------------------------------------------------------------------------
+ASIM_INCDIRS=$REPLACE$INCDIRS
+SRCDIR=src
+
+#-----------------------------------------------------------------------------
+# root of build tree
+#-----------------------------------------------------------------------------
+BUILDROOT = $REPLACE$BUILDROOT
+BUILDABSROOT = $REPLACE$BUILDABSROOT
+
+#-----------------------------------------------------------------------------
+# TARGET and required components
+#-----------------------------------------------------------------------------
+TARGET=$REPLACE$TARGET
+
+#-----------------------------------------------------------------------------
+# paths to sources
+#-----------------------------------------------------------------------------
+VPATH=$(SRCDIR)
+GNUDIR = $(SRCDIR)
+
+#-----------------------------------------------------------------------------
+# configuration for using multiple compilers
+#-----------------------------------------------------------------------------
+OSVER = $(shell uname -r | sed -e s/[TVX]// -e s/\\.//)
+
+INCLUDES = -I$(GNUDIR) $(ASIM_INCDIRS) -I.
+
+##
+## Files to be compiled
+##
+CXXNAMES = softsdv_dummy cpuapi_interface
+CXXOBJS := $(addsuffix .o, $(CXXNAMES))
+CXXOOBJS := $(addprefix obj/, $(CXXOBJS))
+
+#-----------------------------------------------------------------------------
+# compilation options
+#-----------------------------------------------------------------------------
+
+CFLAGS += -fPIC -DLINUX
+
+#-----------------------------------------------------------------------------
+# build rules
+#-----------------------------------------------------------------------------
+.PHONY: all
+all : dirs $(TARGET)
+
+$(TARGET): $(CXXOOBJS) \
+           $(BUILDROOT)/softsdv/libasim_softsdv_stub.so
+	rm -rf $@
+	ar -q $@ obj/softsdv_dummy.o
+
+# generate both .o files and .d files for #include dependencies;
+# we create all .o file in a separate obj/ directory;
+# we move the .d files into a separate .depend/ directory;
+# Note1: Ccache compilations leave the .d in . so we move it to obj/
+# Note2: GEM cxx -MD is broken and needs the sed fix!
+$(CXXOOBJS): obj/%.o: %.cpp
+	g++-2.95 $(MKDEPEND) -c -o $@ $(CFLAGS) -DBUILDABSROOT=$(BUILDABSROOT) $(INCLUDES) $<
+	@dfile=$(notdir $(basename $@)).d; if [ -e $$dfile ]; then mv $$dfile obj/$$dfile; fi
+	@sed -e 's/^\([^/]*\.o:\)/obj\/\1/' $(DEPEND_FILE) > .depend/$(notdir $(basename $@)).d
+	@rm -f $(DEPEND_FILE)
+
+$(BUILDROOT)/softsdv/libasim_softsdv_stub.so: $(CXXOOBJS)
+	rm -rf $@
+	g++-2.95 -shared -o $@ $(CFLAGS) obj/cpuapi_interface.o
+
+#-----------------------------------------------------------------------------
+# utility rules
+#-----------------------------------------------------------------------------
+.PHONY: dirs
+dirs: .depend obj $(BUILDROOT)/softsdv
+.depend obj $(BUILDROOT)/softsdv:
+	@mkdir $@
+
+.PHONY: clean
+clean :
+	@rm -rf $(BUILDROOT)/softsdv
+	@rm -rf obj
+	@rm -rf .depend
+	@rm -rf cxx_repository
+
+.PHONY: realclean
+realclean : clean
+	rm -f $(TARGET)
+
+.PHONY: nuke
+nuke :  realclean
+	rm -rf *
+
+install:
+	
+
+#-----------------------------------------------------------------------------
+# include all generated dependencies (unless *clean* goal)
+#-----------------------------------------------------------------------------
+ifneq ($(findstring clean, $(MAKECMDGOALS)), clean)
+-include .depend/*.d
+endif

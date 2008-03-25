@@ -1,0 +1,43 @@
+/*
+ * Copyright (C) 2004-2006 Intel Corporation
+ * 
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ * 
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ * 
+ */
+
+/******************************************************************
+ *
+ * ISA specific data structures common to both the Asim and
+ * SoftSDV processes.  (E.g. instructions and register values)
+ *
+ * You might think this could be folded in to one of the other ISA
+ * specific modules, but I can't find a way.  All the other ISA
+ * specific modules are included on only one side and won't compile
+ * on the other.  This module must compile on both sides.
+ *
+ ******************************************************************/
+
+
+%AWB_START
+
+%name SoftSDV x86 Data
+%desc SoftSDV x86 Data
+%attributes softsdv x86
+%provides softsdv_isa_data
+%public softsdv_data_x86.h
+
+%param SOFTSDV_CACHE_LINE_BYTES 64 "Size of cache lines captured when SOFTSDV_MEMORY_VALUES is enabled."
+
+%AWB_END

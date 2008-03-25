@@ -1,0 +1,4 @@
+This stub built here is loaded as a performance model in SoftSDV.  To build
+it, make sure the .h files in import correspond to the version of SoftSDV
+you intend to use.  The files come from the gambit and cpuc components in
+SoftSDV.

@@ -1,0 +1,101 @@
+//
+// Copyright (C) 2003-2006 Intel Corporation
+// 
+// This program is free software; you can redistribute it and/or
+// modify it under the terms of the GNU General Public License
+// as published by the Free Software Foundation; either version 2
+// of the License, or (at your option) any later version.
+// 
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+// 
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+// 
+
+//
+// File: vpccfg_app_ia64.rc
+// Description: Initialization/configuration for application mode in ia64
+//
+
+-no_envp
+
+//-exact_fp             !! very slow !!
+-exact_fma
+-exact_mfl
+-exact_frcpa
+-exact_getf_exp
+
+-dbrc=asim_run_db.rc
+-trace=i 
+-trace=r 
+-trace=w 
+-trace=b    
+-no_warn
+-no_signon
+-app
+-alat
+-no_envp
+-trg_proc=mckinley
+-no_chipset
+
+#include rc_files/cpu.rc
+
+
+// ----------------
+// memory ranges
+// ----------------
+
+// Cover full 64bit address space in two steps - first...
+data.config.rc_info.memory.0.StartAddress=0x0
+data.config.rc_info.memory.0.Size=0xfffffffffffff000
+data.config.rc_info.memory.0.InitValue=0x0
+data.config.rc_info.memory.0.Type=RAM
+
+// and then the last 4k page...
+data.config.rc_info.memory.1.StartAddress=0xfffffffffffff000
+data.config.rc_info.memory.1.Size=0xfff
+data.config.rc_info.memory.1.InitValue=0x0
+data.config.rc_info.memory.1.Type=RAM
+
+
+// ----------------
+// vpc modules
+// ----------------
+
+vpc_kernel.data.vpc.modules.1.modulename=vpc.ram
+vpc_kernel.data.vpc.modules.1.pathname=libgenram.so
+
+vpc_kernel.data.vpc.modules.2.modulename=vpc.cpu
+vpc_kernel.data.vpc.modules.2.pathname=libcpu.so
+vpc_kernel.data.vpc.modules.2.quota=150000000
+
+vpc_kernel.data.vpc.modules.3.modulename=vpc.trcgen
+vpc_kernel.data.vpc.modules.3.pathname=libtrcgen.so
+
+// vpc bios
+vpc_kernel.data.vpc.bios.atbiosemul=0
+
+// vpc time
+//vpc_kernel.data.vpc.time.quantum=15000000
+vpc_kernel.data.vpc.time.nsecPerInst=100.0
+
+
+
+// vpc debug
+// 0 == kernel
+vpc_kernel.data.vpc.debug.mode=0x000000000
+vpc_kernel.data.vpc.debug.vpclog=vpc.log
+
+vpc_kernel.data.vpc.debug.2.moduleName=vpc.cpu
+vpc_kernel.data.vpc.debug.2.debugmask=0x21
+
+// comment following lines to generate kernel debug messages:
+vpc_kernel.data.vpc.debug.0.moduleName=vpc.kernel
+vpc_kernel.data.vpc.debug.0.debugmask=0x00
+
+
+notifier.vpc.kernel.simul_mode = 2

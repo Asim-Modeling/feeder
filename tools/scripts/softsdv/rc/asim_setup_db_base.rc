@@ -1,0 +1,44 @@
+#
+#  Copyright (C) 2003-2006 Intel Corporation
+#  
+#  This program is free software; you can redistribute it and/or
+#  modify it under the terms of the GNU General Public License
+#  as published by the Free Software Foundation; either version 2
+#  of the License, or (at your option) any later version.
+#  
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#  
+#  You should have received a copy of the GNU General Public License
+#  along with this program; if not, write to the Free Software
+#  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+#  
+#
+
+#
+# This works with SoftSDV v20040718_0 and later
+#
+include asim_main.rc
+
+# Run with high nsecPerInst to get through BIOS but switch to real
+# value before kernel starts so timing loops are correct.
+step 250000000
+obj vpc_kernel.notifier.vpc.time.nsecPerInst=1.0
+
+!lang perl
+
+$ok = asim::wait_for_boot();
+
+!lang ssdv
+@vpc.eide latency 0 0 enable
+@vpc.eide latency 0 1 enable
+@vpc.eide latency 1 0 enable
+@vpc.eide latency 1 1 enable
+!lang perl
+
+asim::save('XXSAVENAMEXX') if ($ok);
+asim::dump_screen_text('screen_output.txt') if ($ok);
+
+quit
