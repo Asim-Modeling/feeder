@@ -892,11 +892,8 @@ CONTEXT_SCHEDULER_CLASS::StartDeschedule(SW_CONTEXT swc)
 void
 CONTEXT_SCHEDULER_CLASS::RemoveSoftwareContext (SW_CONTEXT swc)
 {
-    
-
-            T1("remove swc called by tid: " << get_asim_thread_id());
-
-//    swc->DumpID();
+    // T1("remove swc called by tid: " << get_asim_thread_id());
+    //    swc->DumpID();
 
     for (UINT32 i=0; i< MAX_NUM_SWCS; i++)
     {
