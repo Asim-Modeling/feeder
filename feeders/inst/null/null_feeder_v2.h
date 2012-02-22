@@ -30,11 +30,16 @@
 class NULL_FEEDER_CLASS : public IFEEDER_BASE_CLASS
 {
   static const UINT32 traceArtificialInstId = UINT32_MAX - 1;
+  IFEEDER_THREAD thread;
   public:
     NULL_FEEDER_CLASS(): IFEEDER_BASE_CLASS(const_cast<char*>("Null Feeder")) {};
     ~NULL_FEEDER_CLASS() {};
 
-    bool Init(UINT32 argc, char **argv, char **envp) { return true; };
+    bool Init(UINT32 argc, char **argv, char **envp) {
+        UINT32 cpu = 0;
+        thread = new IFEEDER_THREAD_CLASS(this, STREAM_HANDLE(cpu), 0);
+        return true;
+    };
     void Done(void) {};
     bool Fetch(IFEEDER_STREAM_HANDLE stream, IADDR_CLASS pc, ASIM_INST inst) 
     { 

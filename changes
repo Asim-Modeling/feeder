@@ -12593,3 +12593,15 @@ Directory feeders/scheduler/context_sched
  context_sched.cpp         Locally Modified            2 
 
 - Added Nop injection to null feeder
+
+----------
+mgambhir    Date: Tue Feb 21 19:35:31 EST 2012  CSN: CSN-feeder-4
+                  Wed Feb 22 00:35:31 UTC 2012
+
+
+Directory feeders/inst/null
+ null_feeder_v2.h          Locally Modified            3 
+
+-Patch by Trevor Carlson and  Wim Heirman to enable the null feeder
+to start a new feeder thread on Init
+
