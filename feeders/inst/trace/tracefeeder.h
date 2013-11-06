@@ -78,6 +78,14 @@ class TRACE_FEEDER_CLASS : public IFEEDER_BASE_CLASS
 
     ADDRESS_TRANSLATOR_CLASS addrTrans;  ///< Translates from virtual to physical address
 
+    // Locks for multi-threaded model
+    pthread_mutex_t fetchLock;
+    pthread_mutex_t commitLock;
+    pthread_mutex_t killLock;
+
+    void MTLock(pthread_mutex_t &lock);
+    void MTUnlock(pthread_mutex_t &lock);
+
 //    TRACE_ORACLE oracle;
     TRACE_MARKER_CLASS marker;
 
@@ -89,22 +97,22 @@ class TRACE_FEEDER_CLASS : public IFEEDER_BASE_CLASS
     class TRACE_HANDLE
     {
       public:
-        TRACE_HANDLE(UINT32 h) :
+        TRACE_HANDLE(PTR_SIZED_UINT h) :
             handle(h)
         {};
 
         TRACE_HANDLE(IFEEDER_STREAM_HANDLE h)
         {
             ASSERTX(h != NULL);
-            handle = (UINT32) h - 1;
+            handle = (PTR_SIZED_UINT) h - 1;
         };
 
-        UINT32 Handle(void)
+        PTR_SIZED_UINT Handle(void)
         {
             return handle;
         };
 
-        operator UINT32()
+        operator PTR_SIZED_UINT()
         {
             return handle;
         };
@@ -115,7 +123,7 @@ class TRACE_FEEDER_CLASS : public IFEEDER_BASE_CLASS
         };
 
       private:
-        UINT32 handle;
+        PTR_SIZED_UINT handle;
     };
 
     // methods
@@ -207,6 +215,33 @@ class TRACE_FEEDER_CLASS : public IFEEDER_BASE_CLASS
         ASIM_INST inst,
         const bool fetchNext,
         const bool killMe);
+};
+
+
+//
+// Lock management functions for multi-threaded models.  Conditionally compiled
+// to do the least work possible on single-threaded runs.
+// 
+inline void
+TRACE_FEEDER_CLASS::MTLock(pthread_mutex_t &lock)
+{
+#if MAX_PTHREADS > 1
+    if (ASIM_SMP_CLASS::GetTotalRunningThreads() > 1)
+    {
+        pthread_mutex_lock(&lock);
+    }
+#endif
+};
+
+inline void
+TRACE_FEEDER_CLASS::MTUnlock(pthread_mutex_t &lock)
+{
+#if MAX_PTHREADS > 1
+    if (ASIM_SMP_CLASS::GetTotalRunningThreads() > 1)
+    {
+        pthread_mutex_unlock(&lock);
+    }
+#endif
 };
 
 #endif // _TRACEFEEDER_H

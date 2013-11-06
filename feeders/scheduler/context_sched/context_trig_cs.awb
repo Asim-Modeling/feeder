@@ -1,0 +1,38 @@
+/*
+ * Copyright (C) 2002-2006 Intel Corporation
+ * 
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ * 
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ * 
+ */
+
+******************************************************************
+Awb module specification
+******************************************************************
+
+%AWB_START
+
+%name Context Trigger
+%desc Context Trigger
+%provides context_trigger
+%attributes trig
+%public context_trig_cs.h
+%private context_trig_cs.cpp
+
+%param %dynamic CS_INTERVAL_TIMER 0 "Cycles between involuntary reschedules, 0 turns it off"
+%param %dynamic CS_SWAP_TIMER 0 "Cycles between involuntary swaps, 0 turns it off"
+%param %dynamic CS_PV_DEFECTS 0 "Core enabled for less-perfect cores, 0 turns it off"
+%param %dynamic CS_ECLASS_DEFECTS 0 "Core swapping enabled for execution class defects, 0 turns it off"
+
+%AWB_END

@@ -86,7 +86,7 @@ class SYNTH_EVENT_CLASS
         if (params->getSynth_Fixed_Size_Refs(threadUid))
         {
             ASSERTX(count_ones(params->getSynth_Fixed_Size_Refs(threadUid)) == 1); //ensure power of 2-ness.
-            fixed_ref_size_log = ilog(params->getSynth_Fixed_Size_Refs(threadUid));
+            fixed_ref_size_log = my_ilog(params->getSynth_Fixed_Size_Refs(threadUid));
         }
         ASSERTX(params->getSynth_Load_Pct(threadUid) <= 100);
         ASSERTX(params->getSynth_Acquire_Pct(threadUid) <= 100);
@@ -280,8 +280,8 @@ class SYNTH_EVENT_CLASS
             else
             {
                 const UINT32 offset =
-                    random_in_range(params->getSynth_Dependent_Range_Stop(threadUid) -
-                                    params->getSynth_Dependent_Range_Start(threadUid) + 1);
+                    my_random_in_range(params->getSynth_Dependent_Range_Stop(threadUid) -
+                                       params->getSynth_Dependent_Range_Start(threadUid) + 1);
                 dependence_distance = params->getSynth_Dependent_Range_Start(threadUid) + offset;
             }
         }
@@ -421,7 +421,7 @@ class SYNTH_EVENT_CLASS
         }           
         else
         {
-            UINT32 sz = random_in_range(4); // values: {0,1,2,3}
+            UINT32 sz = my_random_in_range(4); // values: {0,1,2,3}
             return sz;
         }
     }

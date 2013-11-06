@@ -65,8 +65,13 @@ THREAD_MGMT_CLASS::~THREAD_MGMT_CLASS()
         {
             delete threads[i];
         }
+        if (ipf_builder[i])
+        {
+            delete ipf_builder[i];
+        }
     }
     delete [] threads;
+    delete [] ipf_builder;
 }
 
 
@@ -76,7 +81,11 @@ THREAD_MGMT_CLASS::make_threads(IFEEDER_BASE feeder, SYNTH_PARAMS p)
     
     params = p;
     
-    ipf_builder = new IPF_INST_BUILDER_CLASS[max_threads](params);
+    ipf_builder = new IPF_INST_BUILDER_CLASS*[max_threads];
+    for(UINT32 i=0;i<max_threads;i++)
+    {
+        ipf_builder[i] = new IPF_INST_BUILDER_CLASS(params);
+    }
    
     //BMSG("Max_threads " <<  max_threads);
     //BMSG("SYNTH_THREADS " <<  SYNTH_THREADS);
@@ -99,9 +108,9 @@ THREAD_MGMT_CLASS::make_threads(IFEEDER_BASE feeder, SYNTH_PARAMS p)
         new_thread_id++)
     {
 
-        ipf_builder[new_thread_id].init( params->getSynth_Even_Bundle(new_thread_id),
-                                         params->getSynth_Odd_Bundle(new_thread_id),
-                                         params->getSynth_Memop_Bundle(new_thread_id));
+        ipf_builder[new_thread_id]->init( params->getSynth_Even_Bundle(new_thread_id),
+                                          params->getSynth_Odd_Bundle(new_thread_id),
+                                          params->getSynth_Memop_Bundle(new_thread_id));
 
         SMSG("New thread " <<  new_thread_id);
 
@@ -182,7 +191,7 @@ THREAD_MGMT_CLASS::issue(ASIM_INST inst,
         }
         else
         {
-            WMSG("issue() did not find the SYNTH_INST");
+            ASIMERROR("issue() did not find the SYNTH_INST");
         }
     }
 
@@ -359,7 +368,7 @@ THREAD_MGMT_CLASS::handle_mvm_read(ASIM_INST inst,
         }
         else
         {
-            WMSG("load/cmpxch was not found at DoRead time.");
+            XMSG("load/cmpxch was not found at DoRead time.");
         }
     }
 } /* handle_mvm_read */
@@ -414,8 +423,8 @@ THREAD_MGMT_CLASS::handle_mvm_writes(ASIM_INST inst,
     }
     else
     {
-        WMSG("Missing synth inst -- assuming value 0");
-        UINT128 q;
+        XMSG("Missing synth inst -- assuming value 0");
+        UINT128_ARR q;
         q.a[0] = 0;
         q.a[1] = 0;
         stored_value.set128(q);
@@ -495,7 +504,7 @@ THREAD_MGMT_CLASS::handle_mvm_one_write(ASIM_INST inst,
         }
         else
         {
-            WMSG("handle_mvm_one_write() did not find the cmpxch SYNTH_INST");
+            XMSG("handle_mvm_one_write() did not find the cmpxch SYNTH_INST");
         }
         if (!doing_conditional_store)
         {
@@ -630,15 +639,15 @@ THREAD_MGMT_CLASS::create_junk_bundle_helper(SYNTH_THREAD thread,
 
     if (even_bundle(predicted_pc))
     {
-        tmplt = ipf_builder[thread->get_uid()].refine_to_syllables(SYNTH_BUNDLE_EVEN,
-                                                thread->get_memop(0),
-                                                ipf_syllables); /* output */
+        tmplt = ipf_builder[thread->get_uid()]->refine_to_syllables(SYNTH_BUNDLE_EVEN,
+                                                 thread->get_memop(0),
+                                                 ipf_syllables); /* output */
     }
     else
     {
-        tmplt = ipf_builder[thread->get_uid()].refine_to_syllables(SYNTH_BUNDLE_ODD,
-                                                thread->get_memop(0),
-                                                ipf_syllables); /* output */
+        tmplt = ipf_builder[thread->get_uid()]->refine_to_syllables(SYNTH_BUNDLE_ODD,
+                                                 thread->get_memop(0),
+                                                 ipf_syllables); /* output */
     }
 
     if (thread->insert_dependent_uses(ipf_syllables))
@@ -756,7 +765,7 @@ THREAD_MGMT_CLASS::consume_synthetic_events(SYNTH_THREAD thread,
         /* put memop info in the SYNTH_MEMOP* m for this syllable */
 
         SYNTH_MEMOP* m = thread->get_memop(i);
-        const SYNTH_FTYPE  ms = ipf_builder[thread->get_uid()].get_memop_syllable(i);
+        const SYNTH_FTYPE  ms = ipf_builder[thread->get_uid()]->get_memop_syllable(i);
         switch(ms)
         {
           case SYNTH_FTYPE_MEMOP:
@@ -796,7 +805,7 @@ THREAD_MGMT_CLASS::consume_synthetic_events(SYNTH_THREAD thread,
     SYNTH_IPF_ENUM ipf_memop_syllables[SYLLABLES_PER_BUNDLE];
 
     IPF_TEMPLATE_ENUM tmplt = 
-        ipf_builder[thread->get_uid()].refine_to_syllables(SYNTH_BUNDLE_MEMOP,
+        ipf_builder[thread->get_uid()]->refine_to_syllables(SYNTH_BUNDLE_MEMOP,
                                         /* pass in 1st element of  */
                                         thread->get_memop(0),
                                         ipf_memop_syllables); /* output */
@@ -914,7 +923,7 @@ THREAD_MGMT_CLASS::convert_event_to_synth_inst(UINT64      streamId,
       case SYNTH_IPF_INVALID:
       case SYNTH_IPF_LAST:
       default:
-        MSG("ERROR: Unexpected SYNTH_IPF_* node.");
+        ASIMERROR("ERROR: Unexpected SYNTH_IPF_* node.");
         exit(1);
     }
 
@@ -1273,8 +1282,8 @@ THREAD_MGMT_CLASS::wrong_path(IADDR_CLASS predicted_pc,
     
     if ( thread->get_wrong_path()  >= WRONG_PATH_LIMIT )
     {
-        MSG("ERROR: We were on the wrong path for " << WRONG_PATH_LIMIT
-            << " calls to FEED::Fetch().");
+        ASIMERROR("ERROR: We were on the wrong path for " << WRONG_PATH_LIMIT
+                  << " calls to FEED::Fetch().");
         exit(1);
     }
 } /* wrong_path  */

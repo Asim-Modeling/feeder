@@ -105,7 +105,7 @@ class THREAD_MGMT_CLASS
 
   private:
 
-    IPF_INST_BUILDER_CLASS * ipf_builder;
+    IPF_INST_BUILDER_CLASS ** ipf_builder;
   
     //
     // MVM interface

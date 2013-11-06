@@ -1052,13 +1052,16 @@ if (-d "${softsdv_rcfiles}/run/sos")
     symlink("${softsdv_rcfiles}/run/sos", "${dstdir}/softsdv/sos") or die "symlink sos failed";
 }
 
-print "Copying the csv configuration files...\n";
-system("cp ${softsdv_base_bin_path}/*.csv ${dstdir}/softsdv");
+if (-f "${softsdv_base_bin_path}/common_cfg.csv")
+{
+    print "Copying the csv configuration files...\n";
+    system("cp ${softsdv_base_bin_path}/*.csv ${dstdir}/softsdv");
+}
 
 print "Copying empty CD-ROM images...\n";
 mkdir("$dstdir/softsdv/cdrom") or die "mkdir $dstdir/softsdv/cdrom failed";
-system("cp ${benchmark_root}/softsdv_ipf/workloads/TOOLS/empty0.iso ${dstdir}/softsdv/cdrom/cd0.iso");
-system("cp ${benchmark_root}/softsdv_ipf/workloads/TOOLS/empty0.iso ${dstdir}/softsdv/cdrom/cd1.iso");
+system("cp ${benchmark_root}/softsdv/tools/images/empty0.iso ${dstdir}/softsdv/cdrom/cd0.iso");
+system("cp ${benchmark_root}/softsdv/tools/images/empty0.iso ${dstdir}/softsdv/cdrom/cd1.iso");
 
 print "Copying feeder specific Asim updates to run directory...\n";
 system("(cd ${softsdv_rcfiles}/asim_run; tar cf - .) | (cd ${dstdir}/softsdv; tar xf -)");
@@ -1609,7 +1612,7 @@ if (($workloaddir ne '') && -f "${workloaddir}/${workload}.dbrc") {
 #
 if (! -f "${dstdir}/softsdv/AUTO/benchmark.tar.gz")
 {
-    system("cp ${benchmark_root}/softsdv_ipf/workloads/TOOLS/empty.tar.gz ${dstdir}/softsdv/AUTO/benchmark.tar.gz");
+    system("cp ${benchmark_root}/softsdv/tools/images/empty.tar.gz ${dstdir}/softsdv/AUTO/benchmark.tar.gz");
 }
 system("touch ${dstdir}/softsdv/AUTO/benchmark.args");
 system("touch ${dstdir}/softsdv/AUTO/benchmark.ofiles");

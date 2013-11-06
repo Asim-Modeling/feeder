@@ -101,22 +101,22 @@ class GAMBIT_FEEDER_CLASS : public IFEEDER_BASE_CLASS
     class STREAM_HANDLE
     {
       public:
-        STREAM_HANDLE(UINT32 h) :
+        STREAM_HANDLE(PTR_SIZED_UINT h) :
             handle(h)
         {};
 
         STREAM_HANDLE(IFEEDER_STREAM_HANDLE h)
         {
             ASSERTX(h != NULL);
-            handle = (UINT32) h - 1;
+            handle = (PTR_SIZED_UINT) h - 1;
         };
 
-        UINT32 Handle(void)
+        PTR_SIZED_UINT Handle(void)
         {
             return handle;
         };
 
-        operator UINT32()
+        operator PTR_SIZED_UINT()
         {
             return handle;
         };
@@ -127,7 +127,7 @@ class GAMBIT_FEEDER_CLASS : public IFEEDER_BASE_CLASS
         };
 
       private:
-        UINT32 handle;
+        PTR_SIZED_UINT handle;
     };
 
 

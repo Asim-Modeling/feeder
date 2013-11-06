@@ -33,6 +33,7 @@
  * %requires inst_stats
  * %public sw_context.h
  * %private sw_context.cpp
- * 
+ * %param %dynamic CORE_SWAP_FEEDER_ENABLE 0 "Use this to enable core swapping, 0 turns it off" 
+ * %param %dynamic CORE_SWAP_DEBUG 0 "Verbose mode for core swap debugging"
  * %AWB_END
  */

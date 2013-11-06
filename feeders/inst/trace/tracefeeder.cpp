@@ -30,6 +30,7 @@
 #include <string.h>
 #include <iostream>
 #include <sstream>
+#include <pthread.h>
 
 // ASIM core
 #include "asim/syntax.h"
@@ -75,6 +76,10 @@ using namespace std;
     mtExitCondition = 0;
     SetCapable(IFEED_V2P_TRANSLATION);
     SetCapable(IFEED_FAST_FORWARD);
+
+    pthread_mutex_init(&fetchLock, NULL);
+    pthread_mutex_init(&commitLock, NULL);
+    pthread_mutex_init(&killLock, NULL);
 }
 
 TRACE_FEEDER_CLASS::~TRACE_FEEDER_CLASS()
@@ -346,10 +351,13 @@ TRACE_FEEDER_CLASS::WarmUp(
 {
     TRACE_HANDLE streamId = stream;
 
+    MTLock(fetchLock);
+
     T1("\tFEED_Warmup from stream id=" << streamId.Handle());
 
     if ((! trace[streamId].IsWarmUp()) || trace[streamId].Eof())
     {
+        MTUnlock(fetchLock);
         return false;
     }
 
@@ -408,6 +416,7 @@ TRACE_FEEDER_CLASS::WarmUp(
 
     trace[streamId].CommitInstr(traceId);
     
+    MTUnlock(fetchLock);
     return true;
 }
 
@@ -420,6 +429,8 @@ TRACE_FEEDER_CLASS::Fetch (
     IADDR_CLASS pc;
     
     TRACE_HANDLE streamId = stream;
+
+    MTLock(fetchLock);
 
     T1("\tFEED_Fetch from stream id=" << streamId.Handle()
           << "\tip: " << predicted_pc
@@ -444,6 +455,7 @@ TRACE_FEEDER_CLASS::Fetch (
         traceConverter->CreateOffPathInst(predicted_pc, inst);
         //   ... and set the trace ID (for interface betwen PM and FEEDER)
         inst->SetTraceID(traceArtificialInstId);
+        MTUnlock(fetchLock);
         return true;
     }
 
@@ -466,6 +478,7 @@ TRACE_FEEDER_CLASS::Fetch (
         // the trace?
         inst->SetTraceID(trace[streamId].GetIdentifier());
 
+        MTUnlock(fetchLock);
         return false;
     }
     else {
@@ -487,6 +500,7 @@ TRACE_FEEDER_CLASS::Fetch (
         //   ... and set the trace ID (for interface betwen PM and FEEDER)
         inst->SetTraceID(traceArtificialInstId);
 
+        MTUnlock(fetchLock);
         return true;
     }
 
@@ -513,6 +527,7 @@ TRACE_FEEDER_CLASS::Fetch (
         inst->SetTraceID(traceWrongpathId);
 
         wrongpath[streamId] = true;
+        MTUnlock(fetchLock);
         return true;
     }
 
@@ -533,6 +548,7 @@ TRACE_FEEDER_CLASS::Fetch (
 //    if (runOracle) {
 //        oracle->Fetch(inst, traceInst, nextpc);
 //    }
+    MTUnlock(fetchLock);
     return true;
 }
 
@@ -544,6 +560,7 @@ void
 TRACE_FEEDER_CLASS::Commit (
     ASIM_INST inst)
 {
+    MTLock(commitLock);
     if (inst->GetTraceID() == traceWrongpathId) {
         ASIMERROR(
             "TRACE_FEEDER::Commit: Attempt to commit wrongpath instruction\n"
@@ -555,6 +572,7 @@ TRACE_FEEDER_CLASS::Commit (
     {
         // we're committing an instruciton that was artificial, i.e., we
         // manufactured it and it doesn't exist on the trace, so just return.
+        MTUnlock(commitLock);
         return;
     }
     
@@ -590,6 +608,8 @@ TRACE_FEEDER_CLASS::Commit (
 	    mtExitCondition = 1;
 	}
     }
+
+    MTUnlock(commitLock);
 }
 
 
@@ -602,6 +622,8 @@ TRACE_FEEDER_CLASS::Kill (
     const bool fetchNext,
     const bool killMe)
 {
+    MTLock(killLock);
+
     // in most cases, the current instruction is not killed if we continue
     // to fetch from the next instruction, and the current instruction
     // is killed if we refetch the current instruction; typically
@@ -645,6 +667,8 @@ TRACE_FEEDER_CLASS::Kill (
     {
         wrongpath[sid] = false;
     }
+
+    MTUnlock(killLock);
 }
 
 

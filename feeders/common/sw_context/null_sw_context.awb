@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2004-2006 Intel Corporation
+ * Copyright (C) 2002-2006 Intel Corporation
  * 
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -16,7 +16,6 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  * 
  */
-
 /********************************************************************
  *
  * Awb module specification
@@ -26,16 +25,11 @@
 /*
  * %AWB_START
  *
- * %name TraceFeeder-Threaded
- * %desc Instruction Feeder from Trace Files
- * %attributes tracefeeder ia64 alpha null pthreads
- * %provides instfeeder_implementation
- * %requires traceinstruction tracereader traceconverter addrtranslator 
- * %private tracefeeder-threaded.cpp tracefeeder-threaded.h
- * %private tracebuffer.cpp tracebuffer.h
- * %private marker.cpp marker.h
- * %export IGNORE_REG_VALUES 1 "if 1 ignore register values in augmented gtrace"
- * %param %dynamic FEEDER_REPLICATE 1 "Number of copies of 1 trace to feed"
- *
+ * %name Null Asim Software Context
+ * %desc Null Asim Software Context
+ * %attributes sched
+ * %provides software_context
+ * %public null_sw_context.h
+ * 
  * %AWB_END
  */

@@ -955,9 +955,12 @@ CPU_INFO_CLASS::InitHandles(const ASIM_REQUESTED_REGS_CLASS &regRqst)
         {
             fprintf(stderr, "Can't translate register:  %s\n",
                     monitorRegs.GetRegName(i));
-            ASIMERROR("Aborting");
+            // FIXME: ASIMERROR("Aborting");
         }
-        monitorRegs.SetRegHandle(i, regHandle);
+        else
+        {
+            monitorRegs.SetRegHandle(i, regHandle);
+        }
     }
 };
 
@@ -1033,7 +1036,7 @@ CPU_INFO_CLASS::GetMonitoredRegValue(
     {
         fprintf(stderr, "Failed to get value of %s\n",
                 monitorRegs.GetRegName(regIdx));
-        ASIMERROR("Aborting...");
+        // FIXME: ASIMERROR("Aborting...");
     }
 
     return actualSize;
@@ -1094,10 +1097,29 @@ CPU_INFO_CLASS::ReadMemory(
     cpuapi_size_t size,
     void *buf)
 {
+#if CPUAPI_VERSION_MAJOR(CPUAPI_VERSION_CURRENT) >= 9
+    cpuapi_size_t hptrSize = size;
+    cpuapi_hptr_t hptrBuf = NULL;
+    
+    if (CPUAPI_Stat_Ok !=
+        asimCpucCallBack->get_hptr(controllerPid, CPUAPI_Access_Read,
+                                   pa, &hptrSize, &hptrBuf))
+    {
+        return false;
+    }
+
+    memcpy(buf, hptrBuf, size);
+
+    ASSERTX(CPUAPI_Stat_Ok == asimCpucCallBack->invalidate_hptr(controllerPid, pa));
+
+    return true;
+#else
+    // Older versions used mem_read and not get_hptr for accessing memory
     return CPUAPI_Stat_Ok == asimCpucCallBack->mem_read(controllerPid,
                                                         pa,
                                                         size,
                                                         buf);
+#endif
 }
 
 

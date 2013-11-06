@@ -35,7 +35,9 @@
 
 // ASIM core
 #include "asim/syntax.h"
-#include "asim/alphaops.h"
+#if ENABLE_ALPHA
+#  include "asim/alphaops.h"
+#endif
 #include "asim/disasm.h"
 #include "asim/atomic.h"
 

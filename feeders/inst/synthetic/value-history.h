@@ -59,7 +59,7 @@ class VALUE_HISTORY_CLASS
     }
 
     UINT64 pick_value(void) const {
-        UINT32 i =  random_in_range(lim);
+        UINT32 i =  my_random_in_range(lim);
         ASSERTX(i<lim);
         return data_va[i];
     }

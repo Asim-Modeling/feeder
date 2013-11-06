@@ -41,21 +41,23 @@ IFEEDER_BASE IFEEDER_BASE_CLASS::activeFeederHead = NULL;
 
 
 IFEEDER_BASE_CLASS::IFEEDER_BASE_CLASS(
-    char *name,
+    const char *name,
     IFEEDER_BASE parentFeeder,
-    FEEDER_TYPE fType)
+    FEEDER_TYPE fType
+)
+  : feederName(name),
+    feederType(fType)
 {
     SetTraceableName(name);
     T1("constructing new feeder");
 
     parent = parentFeeder;
+    child = NULL;
     nActiveThreads = 0;
 
     nextActiveFeeder = activeFeederHead;
     activeFeederHead = this;
 
-    feederName = name;
-    feederType = fType;
     // This isn't passed in the constructor because we should get rid of it
     macroType = IFEED_MACRO_UNKNOWN;
 

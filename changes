@@ -12605,3 +12605,146 @@ Directory feeders/inst/null
 -Patch by Trevor Carlson and  Wim Heirman to enable the null feeder
 to start a new feeder thread on Init
 
+
+----------
+mgambhir    Date: Wed Nov  6 16:03:18 EST 2013  CSN: CSN-feeder-5
+                  Wed Nov  6 21:03:18 UTC 2013
+
+
+Directory tools/scripts/softsdv
+ setup-softsdv             Locally Modified            4 
+
+Directory tools/scripts/softsdv/pm
+ asim.pm                   Locally Modified            4 
+
+Directory tools/scripts/softsdv/shell-scripts
+ RUN.CMD                   Locally Modified            4 
+
+Directory pm
+ isa/                      Locally Added               0 
+
+Directory pm/isa
+ null_macro_inst.awb       Locally Added               0 
+ null_micro_inst.cpp       Locally Added               0 
+ null_inst_addr.cpp        Locally Added               0 
+ null_micro_inst.h         Locally Added               0 
+ null_inst_addr.h          Locally Added               0 
+ null_micro_inst.awb       Locally Added               0 
+ null_macro_inst.cpp       Locally Added               0 
+ null_inst_addr.awb        Locally Added               0 
+ null_cpu_mode.h           Locally Added               0 
+ null_isa.h                Locally Added               0 
+ null_cpu_mode.awb         Locally Added               0 
+ null_macro_inst.h         Locally Added               0 
+ null_isa.awb              Locally Added               0 
+
+Directory .
+ pm/                       Locally Added               0 
+
+Directory feeders
+ null_feeder2archlib.h     Locally Added               0 
+ null_feeder2archlib.awb   Locally Added               0 
+
+Directory feeders/memory-values
+ memory-values.h           Locally Modified            4 
+
+Directory feeders
+ null_feeder.cpp           Locally Added               0 
+
+Directory feeders/common/hw_context
+ null_hw_context.h         Locally Added               0 
+ null_hw_context.awb       Locally Added               0 
+ null_hw_context.cpp       Locally Added               0 
+
+Directory feeders/common/sw_context
+ null_sw_context.awb       Locally Added               0 
+ sw_context.h              Locally Modified            4 
+ sw_context.awb            Locally Modified            4 
+ null_sw_context.h         Locally Added               0 
+ sw_context.cpp            Locally Modified            4 
+
+Directory feeders
+ null_feeder.h             Locally Added               0 
+ null_feeder.awb           Locally Added               0 
+ null_feeder2archlib.cpp   Locally Added               0 
+
+Directory feeders/inst/interface/base
+ page_table_info.cpp       Locally Modified            4 
+ instfeederbase.cpp        Locally Modified            4 
+ page_table_info.h         Locally Modified            4 
+ asimthread.h              Locally Modified            4 
+ feedersystemevent.h       Locally Modified            4 
+ instfeederbase.h          Locally Modified            4 
+ instfeederbase.awb        Locally Modified            4 
+
+Directory feeders/inst/softsdv/arch_x86
+ softsdv_macro_feeder_x86.awb Locally Modified            4 
+ softsdv_feeder_x86.cpp    Locally Modified            4 
+
+Directory feeders/inst/softsdv/asim_softsdv_stub/arch_x86
+ cpuapi_x86.cpp            Locally Modified            4 
+
+Directory feeders/inst/softsdv/asim_softsdv_stub/arch_x86/import
+ v20061019_0/              Locally Added               0 
+
+Directory feeders/inst/softsdv/asim_softsdv_stub/arch_x86/import/v20061019_0
+ iel.h                     Locally Added               0 
+ decp69.h                  Locally Added               0 
+ cpuapi_arch_ia32.h        Locally Added               0 
+ vpc_types.h               Locally Added               0 
+ cpuc_odb.h                Locally Added               0 
+ disp69.h                  Locally Added               0 
+ cpuapi_mem.h              Locally Added               0 
+ oml_api.h                 Locally Added               0 
+ EM_tools.h                Locally Added               0 
+ cpuapi.h                  Locally Added               0 
+ build_g++                 Locally Added               0 
+ build_gcc                 Locally Added               0 
+ cpuapi_sim_elements.h     Locally Added               0 
+ cpuapi_types.h            Locally Added               0 
+
+Directory feeders/inst/softsdv/asim_softsdv_stub
+ cpuapi_interface.cpp      Locally Modified            4 
+ Makefile.template         Locally Modified            4 
+
+Directory feeders/inst/memfeeder
+ mem-feeder.h              Locally Modified            4 
+
+Directory feeders/inst/synthetic
+ synthetic-feeder.h        Locally Modified            4 
+ synth-thread-mgmt.cpp     Locally Modified            4 
+ synth-util.h              Locally Modified            4 
+ synth-debug.cpp           Locally Modified            4 
+ synth-events.h            Locally Modified            4 
+ synth-util.cpp            Locally Modified            4 
+ value-history.h           Locally Modified            4 
+ synth-thread-mgmt.h       Locally Modified            4 
+ synthetic-feeder-int.cpp  Locally Modified            4 
+
+Directory feeders/inst
+ null_instfeeder.awb       Locally Added               0 
+
+Directory feeders/inst/gambitv3
+ gambit_feeder.h           Locally Modified            4 
+
+Directory feeders/inst/trace
+ tracefeeder.cpp           Locally Modified            4 
+ tracefeeder-threaded.awb  Locally Removed             4 
+ tracefeeder.h             Locally Modified            4 
+ tracefeeder-threaded.cpp  Locally Removed             4 
+ tracefeeder-threaded.h    Locally Removed             4 
+
+Directory feeders/scheduler/context_sched
+ context_trig_cs.cpp       Locally Added               0 
+ context_trig_cs.h         Locally Added               0 
+ context_sched_cs.awb      Locally Added               0 
+ null_context_sched.awb    Locally Added               0 
+ context_sched_cs.cpp      Locally Added               0 
+ context_sched.awb         Locally Modified            4 
+ null_context_sched.cpp    Locally Added               0 
+ context_sched_cs.h        Locally Added               0 
+ context_trig_cs.awb       Locally Added               0 
+ null_context_sched.h      Locally Added               0 
+ context_sched.cpp         Locally Modified            4 
+
+- Sync with Intel repository

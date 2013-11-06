@@ -63,7 +63,15 @@ SW_CONTEXT_CLASS::SW_CONTEXT_CLASS
          deschedulePending(false),
          deletePending(false), 
          streamEnded(false) ,
-         running(false)
+         running(false),
+         cs_done(false),
+	     running_cs(false),
+	     cs_in_progress(false),
+         firstInstructionFetched(false),
+         swapCount(0),
+	     nMicroCommitted(0),
+	     nMacroCommitted(0),
+	     runningHWCId((UINT64) -1)
 { 
     strcpy(procName, "<unknown>");
     SetTraceableName("SW_CONTEXT_CLASS");
@@ -143,6 +151,12 @@ SW_CONTEXT_CLASS::GetDeletePending (void) const
     return(deletePending);
 }
 
+bool 
+SW_CONTEXT_CLASS::GetFirstInstructionFetched (void) const 
+{
+    return(firstInstructionFetched);
+}
+
 IFEEDER_STREAM_HANDLE
 SW_CONTEXT_CLASS::GetFeederStreamHandle(void) const
 {
@@ -198,7 +212,8 @@ SW_CONTEXT_CLASS::SetNotRunnable (void)
 void 
 SW_CONTEXT_CLASS::SetDeschedulePending (void) 
 {
-    cout<<"Deschedule called"<<endl;
+    if (CORE_SWAP_DEBUG)
+	cout << "Deschedule called" << endl;
     deschedulePending = true;
 }
     
@@ -207,7 +222,21 @@ SW_CONTEXT_CLASS::SetNotDeschedulePending (void)
 {
     deschedulePending = false;
 }
-    
+
+void
+SW_CONTEXT_CLASS::SetFirstInstructionFetched (void)
+{
+    T1("Setting firstInstructionFetched" << endl);
+    firstInstructionFetched = true;
+}
+ 
+void
+SW_CONTEXT_CLASS::SetNotFirstInstructionFetched (void)
+{
+    T1("Resetting firstInstructionFetched" << endl);
+    firstInstructionFetched = false;
+}
+   
 void 
 SW_CONTEXT_CLASS::SetDeletePending (void)
 {
@@ -303,7 +332,16 @@ string SW_CONTEXT_CLASS::StateToString()
     {
         buf << "\tstreamEnded is false" << "\n";
     }
-        
+     
+    if (GetFirstInstructionFetched()) 
+    {
+        buf << "\tFirst instruction has been fetched" << "\n";
+    }
+    else
+    {
+        buf << "\tFirst instruction has not been fetched" << "\n";
+    }
+
     buf << ContextSwitchStateToString();
 
     return(buf.str());
@@ -378,24 +416,45 @@ SW_CONTEXT_CLASS::Fetch(
     // The scheduler may have requested a context switch since this
     // routine was called last for this swc. If so, send
     // one and record that we did.
-    if (contextSwitchState == CONTEXT_SWITCH_REQUESTED || contextSwitchState == CONTEXT_SWITCH_SENT)
+    
+    // okhan_cs: only initiate CS at SOF (macro) boundary.
+    if (!cs_in_progress && CORE_SWAP_FEEDER_ENABLE) 
+    {
+	cs_in_progress = ((contextSwitchState == CONTEXT_SWITCH_REQUESTED) || (contextSwitchState == CONTEXT_SWITCH_SENT)) && (ip.GetSOF() == 1);
+    }
+    
+    // okhan_cs
+    if ((CORE_SWAP_FEEDER_ENABLE && cs_in_progress) || 
+	(!CORE_SWAP_FEEDER_ENABLE && (contextSwitchState == CONTEXT_SWITCH_REQUESTED || contextSwitchState == CONTEXT_SWITCH_SENT))) 
     {
         ainst = new ASIM_INST_CLASS(this);
-
-        T1("\tThis a contextSwitch is requested or sent ");
+	
+	if (CORE_SWAP_DEBUG)
+	{
+	    // okhan_cs: debug aids
+	    cout << "CONTEXT_SWITCH requested or sent: Convert this macro op fetch into ASIM_CONTEXT_SWITCH type" << endl;
+	    cout << "\t @Cycle: " << cycle << " FETCH will convert this instr to CS ----> Macro: " << ip << endl;
+	}
+	T1("\tThis a contextSwitch is requested or sent ");
         ainst->SetAsimSchedulerContextSwitch(true);
-        success = iFeeder->Fetch(feederStreamHandle, ip, ainst, cycle);
-
+        success = iFeeder->Fetch(feederStreamHandle, fetchIp, ainst, cycle);
+	
         ASSERTX(success);
-
+	
         contextSwitchState = CONTEXT_SWITCH_SENT;
-        
+	
+	// okhan_cs: clear the bit once the NOP is injected in pipeline. Also, ensures all CS NOPs
+	// are sent on an SOF boundary.
+	if (CORE_SWAP_FEEDER_ENABLE) {
+	    cs_in_progress = false;
+	}
+	
         return ainst;
     }
     else
     {
         ainst = new ASIM_INST_CLASS(this);
-
+	
         if (!running)
         {
             // this is the first fetch for this swc ever, or since it was last
@@ -407,7 +466,24 @@ SW_CONTEXT_CLASS::Fetch(
             T1("\tThis SWC is starting up.  Calling SetIstreamStartup.");
             running = true;
         }
+	if (running_cs) {
+	    // okhan_cs: debug aids
+	    T1("SWC restart after being switched out by the context switch");
+	    if (CORE_SWAP_DEBUG)
+	    {
+		cout << "Restarting Fetch after a CS completed" << endl;
+		cout << "\t\t Start of Flow " << GetResumptionPC().GetSOF() << endl;
+		cout << "\t___FETCH (Archlib) a_uid = "<< ainst->GetUid() << " address: " << GetResumptionPC() 
+		     << endl;
+	    }
 
+	    success = iFeeder->Fetch(feederStreamHandle, GetResumptionPC(), ainst, cycle);
+	    
+	    T1("SWC restart successful");
+	    running_cs = false;
+	    return ainst;
+	}															
+	
         // Get architectural instruction from feeder. 
         success = iFeeder->Fetch(feederStreamHandle, fetchIp, ainst, cycle);
         if (!success)
@@ -428,7 +504,8 @@ ASIM_INST
 SW_CONTEXT_CLASS::FetchMicro(
     UINT64 cycle,
     ASIM_MACRO_INST macro,
-    IADDR_CLASS ip)
+    IADDR_CLASS ip,
+    bool do_rename)
 {
     ASIM_INST ainst;
     bool success;
@@ -437,18 +514,37 @@ SW_CONTEXT_CLASS::FetchMicro(
     // The scheduler may have requested a context switch since this
     // routine was called last for this swc. If so, send
     // one and record that we did.
-    if (contextSwitchState == CONTEXT_SWITCH_REQUESTED || contextSwitchState == CONTEXT_SWITCH_SENT)
+    
+    // okhan_cs: only initiate CS at SOF (macro) boundary.
+    if (!cs_in_progress && CORE_SWAP_FEEDER_ENABLE) 
+    {
+	cs_in_progress = ((contextSwitchState == CONTEXT_SWITCH_REQUESTED) || (contextSwitchState == CONTEXT_SWITCH_SENT)) && (ip.GetSOF() == 1);
+    }
+    
+    // okhan_cs
+    if ((CORE_SWAP_FEEDER_ENABLE && cs_in_progress) ||
+	(!CORE_SWAP_FEEDER_ENABLE && (contextSwitchState == CONTEXT_SWITCH_REQUESTED || contextSwitchState == CONTEXT_SWITCH_SENT))) 
     {
         ainst = new ASIM_INST_CLASS(this);
-
-        T1("\tThis a contextSwitch is requested or sent ");
-        ainst->SetAsimSchedulerContextSwitch(true);
-        success = iFeeder->FetchMicro(feederStreamHandle, ip, macro, ainst, cycle);
-
+	if (CORE_SWAP_DEBUG)
+	{
+	    // okhan_cs: debug aids
+	    cout << "\tCONTEXT_SWITCH requested or sent: Convert this MICRO OP fetch into ASIM_CONTEXT_SWITCH type" << endl;
+	    cout << "\t @Cycle " << cycle << " FETCHMicro will convert this instr to CS ----> Macro: " << ip << endl;
+	}
+	T1("\tThis a contextSwitch is requested or sent ");
+        
+	ainst->SetAsimSchedulerContextSwitch(true);
+        success = iFeeder->FetchMicro(feederStreamHandle, fetchIp, macro, ainst, cycle, do_rename);
+        
         ASSERTX(success);
 
         contextSwitchState = CONTEXT_SWITCH_SENT;
-        
+	
+	// okhan_cs: clear the bit once the NOP is injected in pipeline. Also, ensures all CS NOPs are sent on an SOF boundary.
+	if (CORE_SWAP_FEEDER_ENABLE) {
+	    cs_in_progress = false;
+	}
         return ainst;
     }
     else
@@ -466,9 +562,30 @@ SW_CONTEXT_CLASS::FetchMicro(
             T1("\tThis SWC is starting up.  Calling SetIstreamStartup.");
             running = true;
         }
-
+	
+	if (running_cs) {
+	    
+	    //okhan_cs: debug aids
+	    T1("SWC restart after being switched out by the context switch");
+	    if (CORE_SWAP_DEBUG)
+	    {
+		cout << "Restarting MICRO Fetch after a CS completed" << endl;
+		IADDR_CLASS ResumptionMicroIp = GetResumptionPC();
+		cout << "\t MACRO IP " << macro->GetDisassembly() << endl;
+		cout << "\t ResumptionMicroIp: " << ResumptionMicroIp << endl;
+		cout << "\t Timing model IP:    " << ip << endl;
+		cout << "\t\t Start of Flow " << GetResumptionPC().GetSOF() << endl;
+		cout << "\t___FETCH (Archlib) a_uid = "<< ainst->GetUid() << " address: " << GetResumptionPC() << endl;
+	    }
+	    success = iFeeder->FetchMicro(feederStreamHandle, GetResumptionPC(), macro, ainst, cycle, do_rename);
+	    
+	    T1("SWC restart successful");
+	    running_cs = false;
+	    return ainst;
+	}                
+	
         // Get architectural instruction from feeder. 
-        success = iFeeder->FetchMicro(feederStreamHandle, fetchIp, macro, ainst, cycle);
+        success = iFeeder->FetchMicro(feederStreamHandle, fetchIp, macro, ainst, cycle, do_rename);
         if (!success)
         {
             HandleEndThread();
@@ -513,6 +630,7 @@ SW_CONTEXT_CLASS::Commit(
     // should really be committed or if it's a manufactured instruction that
     // doesn't need to commit.
     iFeeder->Commit(ainst);
+    nMicroCommitted++;
     
     // commit if it's not a context switch instruction
     if (ainst->GetAsimSchedulerContextSwitch())
@@ -523,18 +641,42 @@ SW_CONTEXT_CLASS::Commit(
         // to make sure we only signal the first one to commit, that's why we're
         // checking the context switch state.  Finally, reset the state so that the
         // next time it runs, it won't look like it is doing a context switch..
+        // cs_done flag was added to avoid the race condition where we finish a
+        // context switch of a SWC and start fetching from it in the same cycle
+        // (on a new HWC).
         if (contextSwitchState == CONTEXT_SWITCH_SENT)
         {
-            contextSwitchState = CONTEXT_SWITCH_NONE;
-            
-            SetResumptionPC(ainst->GetVirtualPC());
-            
-            T1("\tContextSwitchCompleted");
-            contextSchedulerHandle->ContextSwitchCompleted(this);
+            if (cs_done) {
+                contextSwitchState = CONTEXT_SWITCH_NONE;
+                cs_done = false;
+            }
+            else {
+                SetResumptionPC(ainst->GetVirtualPC());
+                
+                T1("\tContextSwitchCompleted");
+                contextSchedulerHandle->ContextSwitchCompleted(this);
 
-            // now that the context scheduler has descehduled this SWC, there
-            // should be NO fetch from this swc, and hence, it's not running.
-            running = false;
+                // now that the context scheduler has descehduled this SWC, there
+                // should be NO fetch from this swc, and hence, it's not running.
+                
+		// okhan_cs: Context switch uses its own running_cs bit
+		if (CORE_SWAP_FEEDER_ENABLE) {
+		    running_cs = true;
+		}
+		else {
+		    running = false;
+		}
+                
+		// okhan_cs: Not needed!
+		// cs_done = true;
+		// okhan_cs: switch the state back to NONE 
+		contextSwitchState = CONTEXT_SWITCH_NONE;
+		if (CORE_SWAP_DEBUG)
+		{
+		    // okhan_cs: debug aid
+		    cout << "\t@ COMMIT ===> SetResumptionPC for " << ainst->GetVirtualPC() << endl;
+		}
+	    }
         }
     }
 }

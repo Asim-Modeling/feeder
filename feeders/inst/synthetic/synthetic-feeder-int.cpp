@@ -113,7 +113,7 @@ static SYNTH_PARAMS params = new SYNTH_PARAMS_CLASS();
 SYNTH_EVENT_CLASS*
 random_get_event(void)
 {
-    UINT32 i = random_in_range(SYNTH_THREADS);
+    UINT32 i = my_random_in_range(SYNTH_THREADS);
     assert(i < SYNTH_THREADS);
     //cerr << "picking node " << i <<endl;
     return thread_mgmt.get_thread(i)->get_event();
@@ -268,7 +268,7 @@ SYNTHETIC_FEEDER_CLASS::Init(UINT32 argc,
 void
 SYNTHETIC_FEEDER_CLASS::Done (void)
 {
-    MSG("FEED::Done() called.");
+    XMSG("FEED::Done() called.");
 }
 
 

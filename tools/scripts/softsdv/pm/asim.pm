@@ -293,6 +293,15 @@ sub set_time_slice($) {
 
 
 ##
+## set_ckpt_compressoin --
+##     Set compression mode for checkpoints.
+##
+sub set_ckpt_compression($) {
+    my ($mode) = @_;
+    ssdv::execute_command("kernel", "vpc_command", "vpc.srmgr mode " . $mode);
+}
+
+##
 ## save --
 ##     Save a checkpoint.
 ##
@@ -303,7 +312,7 @@ sub save($) {
     if (! $oldVersion)
     {
         ## Recent versions of SoftSDV -- use built in save
-        ssdv::set_data("oml", "data", "notifier.save_mode", 3);
+        set_ckpt_compression("zlib");
         main::save($fName);
         # SoftSDV gets the proection wrong (no world access)
         chmod(0644, "${fName}.bwa");
@@ -315,7 +324,7 @@ sub save($) {
         ## SoftSDV's srlib to use popen on any file name beginning with |
         ## when save_mode is 0 so we can output through scripts.
         ##
-        ssdv::set_data("oml", "data", "notifier.save_mode", 0);
+        set_ckpt_compression("none");
 
         ##
         ## Treat the save name argument as a directory into which SoftSDV will
@@ -352,7 +361,7 @@ sub save_delta($$) {
     if (! $oldVersion)
     {
         ## Recent versions of SoftSDV have built in delta compression
-        ssdv::set_data("oml", "data", "notifier.save_mode", 3);
+        set_ckpt_compression("zlib");
         main::save("-base ${baseName} ${fName}");
         # SoftSDV gets the proection wrong (no world access)
         chmod(0644, "${fName}.bwa");
@@ -360,7 +369,7 @@ sub save_delta($$) {
     else
     {
         ## Use our own delta compression
-        ssdv::set_data("oml", "data", "notifier.save_mode", 0);
+        set_ckpt_compression("none");
 
         ##
         ## Treat the save name argument as a directory into which SoftSDV will
@@ -395,13 +404,11 @@ sub restore($) {
         print "Restoring checkpoint from directory ${fName}\n";
         ## Hack -- SoftSDV doesn't accept spaces in file names.  ^ is converted
         ## to space in srlib at the last moment.
-        ssdv::set_data("oml", "data", "notifier.save_mode", 0);
+        set_ckpt_compression("none");
         main::restore("|checkpoint_restore^${fName}/save");
     }
     else {
         print "Restoring checkpoint from ${fName}\n";
-        ## Standard compressed SoftSDV file
-        ssdv::set_data("oml", "data", "notifier.save_mode", 3);
         main::restore(${fName});
     }
 }

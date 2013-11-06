@@ -527,10 +527,24 @@ Description:
 ==============================================================================*/
 void notify_memory_write(cpuapi_cid_t cid,
                          cpuapi_phys_addr_t paddr,
-                         cpuapi_size_t size)
+                         cpuapi_size_t size
+#if CPUAPI_VERSION_MAJOR(CPUAPI_VERSION_CURRENT) >= 9
+                         ,
+                         cpuapi_boolean_t is_dma
+#endif
+                        )
 {
     UINT32 cpuNum = (UINT32) cid;
-//    printf("CPU %d:  Memory write 0x%llx - %lld bytes\n", cpuNum, paddr, size);
+
+//    printf("CPU %d:  Memory write 0x%llx - %lld bytes", cpuNum, paddr, size);
+//#if CPUAPI_VERSION_MAJOR(CPUAPI_VERSION_CURRENT) >= 9
+//    if (is_dma)
+//    {
+//        printf(" (DMA)");
+//    }
+//#endif
+//    printf("\n");
+
     if (dmaIdx != NULL)
     {
         dmaIdx->InvalidateAddr(paddr, size);
@@ -881,7 +895,7 @@ cpuapi_load_module(
 #define CPUAPI_STOP_ASAP ""
 #endif
     cpu_prop.capabilities = CPUAPI_MFINIT " " CPUAPI_MFTRM " " CPUAPI_EX " " CPUAPI_STOP_ASAP;
-    if (CPUAPI_VERSION_MAJOR(CPUAPI_VERSION_CURRENT) <= 6)
+    if (CPUAPI_VERSION_MAJOR(CPUAPI_VERSION_CURRENT) <= 9)
     {
         cpu_prop.version = version;
     }

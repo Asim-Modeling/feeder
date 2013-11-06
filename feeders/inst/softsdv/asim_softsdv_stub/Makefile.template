@@ -42,7 +42,7 @@ GNU = $REPLACE$GNU
 OPT = $REPLACE$OPT
 DEBUG = $REPLACE$DEBUG
 STATIC = $REPLACE$STATIC
-WARN = $REPLACE$WARN
+WARN = 0
 PAR = $REPLACE$PAR
 COMMON_LFLAGS:=$REPLACE$COMMON_LFLAGS
 LOCAL_LFLAGS:=$REPLACE$LOCAL_LFLAGS
@@ -124,6 +124,11 @@ CXXOOBJS = $(CXX_SOFTSDV_OOBJS) $(CXX_ASIM_OOBJS)
 
 CFLAGS += -fPIC -DLINUX
 
+#CFLAGS coming from Makefile.config has -m32 flag set which gcc 2.95.3 does not like
+CFLAGS_1 = $(WFLAGS) $(OFLAGS) $(DBGFLAGS) $(CPLRFLAGS) $(HFLAGS) $(HINCS) \
+         $(STATFLAGS) $(XMLCFLAGS) $(TPCFLAGS) \
+         $(LOCAL_CFLAGS) $(COMMON_INCDIR) -fPIC -DLINUX
+
 #-----------------------------------------------------------------------------
 # build rules
 #-----------------------------------------------------------------------------
@@ -152,13 +157,13 @@ softsdv_support_$(SOFTSDV_ISA).a: $(CXXOOBJS) $(CXX_SOFTSDV_ISA_OOBJS) \
 #
 
 $(CXX_SOFTSDV_OOBJS) $(CXX_SOFTSDV_ISA_OOBJS): obj_s/%.dummy: %.cpp $(CXX_ASIM_OOBJS)
-	for ver in $(SOFTSDV_VERSIONS); do src/arch_$(SOFTSDV_ISA)/import/$${ver}/build_g++ $(MKDEPEND) -c -o obj_s/$${ver}/$(@F:.dummy=.o) -Isrc/arch_$(SOFTSDV_ISA)/import/$${ver} $(CFLAGS) -DBUILDABSROOT=$(BUILDABSROOT) -DSOFTSDV_STUB $(INCLUDES) $<; if [ $$? != 0 ]; then exit 1; fi; done
+	for ver in $(SOFTSDV_VERSIONS); do src/arch_$(SOFTSDV_ISA)/import/$${ver}/build_g++ $(MKDEPEND) -c -o obj_s/$${ver}/$(@F:.dummy=.o) -Isrc/arch_$(SOFTSDV_ISA)/import/$${ver} $(CFLAGS_1) -DBUILDABSROOT=$(BUILDABSROOT) -DSOFTSDV_STUB $(INCLUDES) $<; if [ $$? != 0 ]; then exit 1; fi; done
 	@sed -e 's#^obj_s/[^/]*/\([^/]*\)\.o:#$@:#' obj_s/$(SOFTSDV_DEFAULT)/$(@F:.dummy=.d) > .depend/s_$(notdir $(basename $@)).d
 	@rm -f obj_s/$(SOFTSDV_DEFAULT)/$(@F:.dummy=.d)
 	@touch $@
 
 $(BUILDROOT)/softsdv/libasim_softsdv_stub_$(SOFTSDV_ISA): $(CXX_SOFTSDV_OOBJS) $(CXX_SOFTSDV_ISA_OOBJS)
-	for ver in $(SOFTSDV_VERSIONS); do src/arch_$(SOFTSDV_ISA)/import/$${ver}/build_g++ -shared -o $@_$${ver}.so $(CFLAGS) obj_s/$${ver}/*.o; if [ $$? != 0 ]; then exit 1; fi; done
+	for ver in $(SOFTSDV_VERSIONS); do src/arch_$(SOFTSDV_ISA)/import/$${ver}/build_g++ -shared -o $@_$${ver}.so $(CFLAGS_1) obj_s/$${ver}/*.o -Lsrc -lc; if [ $$? != 0 ]; then exit 1; fi; done
 	@if [ "$(SOFTSDV_ISA)" = "ipf" ]; then cd $(BUILDROOT)/softsdv; rm -f libasim_softsdv_stub.so; ln -s libasim_softsdv_stub_ipf_v20030312_0.so libasim_softsdv_stub.so; fi
 	touch $@
 

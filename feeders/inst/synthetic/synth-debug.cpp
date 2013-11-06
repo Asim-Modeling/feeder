@@ -61,7 +61,7 @@ disassemble2(ASIM_INST inst, char* s)
     {
         cout << s;
     }
-    UINT32 streamId = ((UINT32)(inst->GetSWC()->GetFeederStreamHandle()))-1; //FIXME
+    UINT32 streamId = PTR_SIZED_UINT(inst->GetSWC()->GetFeederStreamHandle()) - 1; //FIXME
     cout << "tid= " << streamId << " ";
     cout << "PC = " << inst->GetVirtualPC() << "  ";
     cout << "uid = " << inst->GetUid() << "  ";

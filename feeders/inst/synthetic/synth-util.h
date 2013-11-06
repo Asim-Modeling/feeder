@@ -32,8 +32,8 @@ static const UINT64 BUNDLE_ADDR_MASK = ~(0xFULL); /* lop off low 4 bits */
 static const UINT32 BYTES_PER_BUNDLE = 16;
 
 UINT32 count_ones(UINT32 x);
-UINT32 ilog(UINT32 arg);
-bool is_power_of_2(UINT32 x);
+UINT32 my_ilog(UINT32 arg);
+bool my_is_power_of_2(UINT32 x);
 
 UINT64 mask_bundle_addr(UINT64 x); // lop off the low bits
 bool even_bundle(IADDR_CLASS pc);
@@ -50,6 +50,6 @@ double random_pct(void);
 bool random_over_threshold(UINT32 thresh);
 bool random_under_threshold(UINT32 thresh);
 UINT64 random_aligned_address(UINT64 shift);
-UINT32 random_in_range(UINT32 x);    // x must be greater than 1.
+UINT32 my_random_in_range(UINT32 x);    // x must be greater than 1.
 
 #endif

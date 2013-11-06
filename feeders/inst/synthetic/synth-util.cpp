@@ -91,7 +91,7 @@ random_aligned_address(UINT64 shift)
 }
 
 UINT32
-random_in_range(UINT32 x)    // x must be greater than 1.
+my_random_in_range(UINT32 x)    // x must be greater than 1.
 {
     UINT32 v =(UINT32) (drand48()*x);
     if (v == x)
@@ -107,7 +107,7 @@ random_in_range(UINT32 x)    // x must be greater than 1.
 
 
 UINT32
-ilog(UINT32 arg)
+my_ilog(UINT32 arg)
 {
     UINT32 i=0;
     UINT32 a=arg;
@@ -121,9 +121,9 @@ ilog(UINT32 arg)
 }
         
 bool
-is_power_of_2(UINT32 x)
+my_is_power_of_2(UINT32 x)
 {
-    return ( (1U << ilog(x))  == x );
+    return ( (1U << my_ilog(x))  == x );
 }
 
 

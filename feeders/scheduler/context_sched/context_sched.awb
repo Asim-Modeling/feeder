@@ -41,6 +41,7 @@
  * %param %dynamic INTERVAL_TIMER 0 "Cycles between involuntary reschedules, 0 turns it off" 
  * %param %dynamic CYCLES_PER_PICOSECOND 2200 "Number of cycles per picosecond"
  *
+ * %export %dynamic CONTEXT_TRANSFER_CYCLES 100 "Cycles taken to transfer a software context between two hardware contexts"
  *
  * %AWB_END
  */

@@ -62,7 +62,7 @@ union UWORD
 typedef struct 
 {
     UINT64 a[2];
-} UINT128;
+} UINT128_ARR;
 
 union UWORD128
 {
@@ -70,7 +70,7 @@ union UWORD128
     UINT16 h[8];
     UINT32 w[4];
     UINT64 d[2];
-    UINT128 q;
+    UINT128_ARR q;
 
     UWORD128() //CONS
     {
@@ -99,7 +99,7 @@ union UWORD128
     {
         d[a & 0x1] = v;
     }
-    inline void set128(const UINT128& v)
+    inline void set128(const UINT128_ARR& v)
     {
         q = v;
     }

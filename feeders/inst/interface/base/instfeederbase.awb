@@ -31,4 +31,6 @@
 %public page_table_info.h instfeederbase.h asimthread.h
 %private feedersystemevent.h page_table_info.cpp instfeederbase.cpp asimthread.cpp
 
+%param ENABLE_ALPHA   1   "Enable Alpha definitions"
+
 %AWB_END

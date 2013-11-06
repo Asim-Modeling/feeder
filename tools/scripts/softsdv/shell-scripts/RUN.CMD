@@ -47,7 +47,7 @@ rem SoftSDV bug sometimes misses the first mark.  Repeat boot.
 mark_send booted
 
 rem Asim expects benchmark to ask what to do.  This script ignores the answer.
-mark_send -r num
+mark_send num
 
 rem Get and invoke the workload.
 mkdir c:\asim

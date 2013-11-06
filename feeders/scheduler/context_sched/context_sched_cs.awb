@@ -1,0 +1,54 @@
+/*
+ * Copyright (C) 2002-2006 Intel Corporation
+ * 
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ * 
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ * 
+ */
+
+/********************************************************************
+ *
+ * Awb module specification
+ *
+ *******************************************************************/
+
+/*
+ * %AWB_START
+ *
+ * %name Context Scheduler for Core Swapping
+ * %desc Context Scheduler for Core Swapping
+ * %attributes sched
+ * %provides context_scheduler
+ * %requires software_context instfeeder context_trigger
+ * %public context_sched_cs.h
+ * %private context_sched_cs.cpp
+ *
+ * %param MAX_NUM_SWCS 128 "Maximum number of software contexts"
+ * %param %dynamic CHECK_RUNNABLE 10 "Cycles between calls to Mingo's GetNextSoftwareThreadEvent"
+ * %param %dynamic CHECK_NEW_STREAM 5 "Cycles between calls to Mingo's CheckForNewSoftwareThread"
+ * %param %dynamic CHECK_EXIT 100 "Cycles between calls to Mingo's EndOfData"
+ * %param %dynamic INTERVAL_TIMER 0 "Cycles between involuntary reschedules, 0 turns it off" 
+ * %param %dynamic CYCLES_PER_PICOSECOND 2200 "Number of cycles per picosecond"
+ * %param %dynamic CORE_SWAP_SCHED_ENABLE 0 "Use this to enable core swapping, 0 turns it off"
+ * %export %dynamic CONTEXT_TRANSFER_CYCLES 100 "Cycles taken to transfer a software context between two hardware contexts"
+ *
+ * %param %dynamic ENABLE_CS_SUPRESS 0 "enable cs supression"
+ * %param %dynamic CS_SUPRESS_CYCLES 50000 "cycles to supress CS and halt if there are too many"
+ * %param %dynamic EVENT_WINDOWSIZE 50000 "size of cs event window"
+ * %param %dynamic CS_EVENTLIMIT 5 "number of cs events at which supress cs"
+ *
+ * %param %dynamic CS_SELECTION_ALGORITHM 0 "which algorithim to use for selecting threads to migrate/swap"
+ *
+ * %AWB_END
+ */

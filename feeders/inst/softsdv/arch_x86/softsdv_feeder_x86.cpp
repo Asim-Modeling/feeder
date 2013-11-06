@@ -78,6 +78,33 @@ SOFTSDV_MACRO_FEEDER_CLASS::InitISASpecific(
                 // Transaction execution control and status.  Experimental
                 // registers not implemented in SoftSDV.
             }
+            else if (! strncmp(sdvName, "arch.lrb.register.vector", 24) ||
+                     ! strncmp(sdvName, "arch.ia32.register.vmm", 22)   ||
+                     ! strncmp(sdvName, "arch.ia32.register.tmpseg", 25)||
+                     ! strcmp(sdvName, "arch.ia32.register.magic_id_reg") ||
+                     ! strcmp(sdvName, "arch.ia32.register.cpuid.6")    ||
+                     ! strcmp(sdvName, "arch.ia32.register.cpuid.7")    ||
+                     ! strcmp(sdvName, "arch.ia32.register.cpuid.8")    ||
+                     ! strcmp(sdvName, "arch.ia32.register.cpuid.9")    ||
+                     ! strcmp(sdvName, "arch.ia32.register.cpuid.10")   ||
+                     ! strcmp(sdvName, "arch.ia32.register.cpuid.11")   ||
+                     ! strcmp(sdvName, "arch.ia32.register.cpuid.12")   ||
+                     ! strcmp(sdvName, "arch.ia32.register.cpuid.13")   ||
+                     ! strcmp(sdvName, "arch.ia32.register.cpuid.14")   ||
+                     ! strcmp(sdvName, "arch.ia32.register.cpuid.15")   ||
+                     ! strcmp(sdvName, "arch.ia32.register.cpuid.ext.9")||
+                     ! strcmp(sdvName, "arch.ia32.register.cpuid.ext.10")||
+                     ! strcmp(sdvName, "arch.ia32.register.cpuid.ext.11")||
+                     ! strcmp(sdvName, "arch.ia32.register.cpuid.ext.12")||
+                     ! strcmp(sdvName, "arch.ia32.register.cpuid.ext.13")||
+                     ! strcmp(sdvName, "arch.ia32.register.cpuid.ext.14")||
+                     ! strcmp(sdvName, "arch.ia32.register.cpuid.ext.15")||
+                     ! strcmp(sdvName, "arch.ia32.register.cpuid.default") ||
+                     ! strcmp(sdvName, "arch.ia32.register.xcontrol.0")
+                    ) 
+            {
+                // Don't monitor newly added registers in archlib. 
+            }
             else
             {
                 request = asimIO->AsimRequestQueue().OpenNext();

@@ -30,11 +30,18 @@
 
 // ASIM core
 #include "asim/syntax.h"
-#include "asim/alphaops.h"
+#if ENABLE_ALPHA
+#  include "asim/alphaops.h"
+#endif
 #include "asim/disasm.h"
 #include "asim/arch_register.h"
 #include "asim/stateout.h"
 #include "asim/memory_reference.h"
+
+// multithreading support
+#if MAX_PTHREADS > 1
+#include "asim/smp.h"
+#endif
 
 
 //----------------------------------------------------------------
@@ -49,7 +56,7 @@ typedef class WARMUP_INFO_CLASS *WARMUP_INFO;
 // a feeder are private to the feeder.  In order to export them,
 // pass them around, and use them in this generic feeder class the
 // private handle must be cast to a handle inside the feeder.
-// 
+//
 typedef void* IFEEDER_STREAM_HANDLE;
 
 /********************************************************************
@@ -144,12 +151,12 @@ class IFEEDER_BASE_CLASS : public TRACEABLE_CLASS
     //   its master will already be in it.
     //
     IFEEDER_BASE_CLASS(
-        char *name = NULL,
+        const char *name = NULL,
         IFEEDER_BASE parentFeeder = NULL,
         FEEDER_TYPE fType = IFEED_TYPE_UNKNOWN);
 
     virtual ~IFEEDER_BASE_CLASS();
-    
+
   public:
 
     //----------------------------------------------------------------
@@ -168,10 +175,11 @@ class IFEEDER_BASE_CLASS : public TRACEABLE_CLASS
         IFEED_MEMORY_PEEK,              // Random access to memory, no instr needed
         IFEED_EXECUTE,                  // feeder can actually execute the
                                         // instruction
-        IFEED_SYSTEM_EVENTS,            //Feeder can be probed for information
-                                        //about system events
-        IFEED_V2P_TRANSLATION,          //this feeder is able to do v2p translations
-        IFEED_DUMP_FUNCTIONAL_STATE,    //this feeder can create a check point of the functional model
+        IFEED_SYSTEM_EVENTS,            // Feeder can be probed for information
+                                        // about system events
+        IFEED_V2P_TRANSLATION,          // this feeder is able to do v2p translations
+        IFEED_DUMP_FUNCTIONAL_STATE,    // this feeder can create a check point of the functional model
+        IFEED_MEM_LOCK,                 // Feeder supports memory locking needed by COOP/McRT traces
         IFEED_LAST                      // MUST BE LAST!!!
     };
 
@@ -182,11 +190,17 @@ class IFEEDER_BASE_CLASS : public TRACEABLE_CLASS
     // Since we can have multiple feeders we want to be able to
     // prefix the stats output with the feeder name.
     //
-    char *feederName;
-    IFEEDER_BASE parent;         // parent feeder in multi-level feeder config
-    FEEDER_TYPE feederType;
+    const char *feederName;
+    const FEEDER_TYPE feederType;
+    IFEEDER_BASE parent;        // parent feeder in multi-level feeder config
+    IFEEDER_BASE child;         // child feeder in multi-level feeder config
     MACRO_FEEDER_TYPE macroType;
-    
+
+    //
+    // trace filenames indexed by thread id
+    //
+    std::vector<char*> traceNames;
+
   protected:
     //
     // Feeder's call this in their constructors to indicate capabilities
@@ -196,15 +210,36 @@ class IFEEDER_BASE_CLASS : public TRACEABLE_CLASS
         features[feature] = true;
     }
 
+    //
+    // Set the trace name for this threadId
+    //
+    void SetTraceName(IFEEDER_STREAM_HANDLE stream, char *name)
+    {
+        std::vector<char*>::size_type index = (PTR_SIZED_UINT)stream;
+        if (index >= traceNames.size())
+        {
+            traceNames.resize(index+1);
+        }
+        traceNames[index] = name;
+    }
+
   public:
     //
     // Test a feeder's capabilities
     //
-    inline bool
+    virtual bool
     IsCapable(CAPABILITIES feature) const
     {
         ASSERTX(feature < IFEED_LAST);
         return features[feature];
+    }
+
+    //
+    // Get the trace name associated with a thread
+    //
+    const char *GetTraceName(IFEEDER_STREAM_HANDLE stream)
+    {
+        return (const char *) traceNames[(PTR_SIZED_UINT) stream];
     }
 
     inline const char *GetFeederName() const { return feederName; }
@@ -212,9 +247,26 @@ class IFEEDER_BASE_CLASS : public TRACEABLE_CLASS
     // Parent of this feeder in multi-level feeder model
     IFEEDER_BASE GetParentFeeder() const { return parent; }
 
+    // child of this feeder in multi-level feeder model
+    IFEEDER_BASE GetChildFeeder() const { return child; }
+
+    void SetParentFeeder(IFEEDER_BASE par)
+    {
+        ASSERTX(parent == NULL);
+        parent = par;
+    }
+
+    void SetChildFeeder(IFEEDER_BASE chi)
+    {
+        ASSERTX(child == NULL);
+        child = chi;
+    }
+
     inline FEEDER_TYPE GetFeederType() const { return feederType; }
 
-    inline MACRO_FEEDER_TYPE GetMacroType() const { return macroType; }
+    virtual MACRO_FEEDER_TYPE GetMacroType() const { return macroType; }
+    virtual void Clock(UINT64 cycle){}
+
   protected:
     inline void SetMacroType(MACRO_FEEDER_TYPE t) { macroType = t; }
 
@@ -247,7 +299,7 @@ class IFEEDER_BASE_CLASS : public TRACEABLE_CLASS
     // The number of active threads created by this feeder and all of its
     // children in the feeder hierarchy.
     //
-    UINT32 NActiveThreads(void) const { return nActiveThreads; }
+    virtual UINT32 NActiveThreads(void) const { return nActiveThreads; }
 
     //
     // SynchronizeFeederState is a hack.  It is a way around using
@@ -342,13 +394,46 @@ class IFEEDER_BASE_CLASS : public TRACEABLE_CLASS
         return false;
     }
 
+    //
+    // Fetch the next micro instruction based on a macro instruction
+    // fetched earlier from the same feeder with FetchMacro().
+    //
+    virtual bool
+    FetchMicro(IFEEDER_STREAM_HANDLE stream,
+               IADDR_CLASS pc,
+               ASIM_MACRO_INST macroInst,
+               ASIM_INST inst,
+               UINT64 cycle,
+               bool do_rename)
+    {
+        if (do_rename)
+        {
+            // NOTE: by default, let's try to call the legacy version of FetchMicro()
+            return FetchMicro(stream, pc, macroInst, inst, cycle);
+        }
+        else
+        {
+            ASIMERROR("Feeder didn't supply a FetchMicro() routine with do_rename==false");
+        }
+        return false;
+    }
+
     virtual UINT64
     GetFirstPC(IFEEDER_STREAM_HANDLE stream)
     {
         return 0;
     }
-    
-    
+
+    //
+    // if halt instruction is seen in trace, but there is an interrupt
+    // pending on this halt, do not halt simulator.
+    //
+    virtual bool
+    IsInterruptPendingAfterThisHalt(ASIM_INST inst)
+    {
+        return false;
+    }
+
   protected:
     //
     // Old style fetch without cycle
@@ -363,6 +448,30 @@ class IFEEDER_BASE_CLASS : public TRACEABLE_CLASS
     }
 
   public:
+    // These added to support the insertion/removal/alteration of instructions
+    // directed from outside of the feeder.  The primary example are those
+    // instruction mutations directly by the timing model.  These instructions
+    // can be registered in the feeder so that they can be executed, committed,
+    // etc.  The caveat is that they should be manipulated before this or younger
+    // instructions have done Issue().   --slechta
+    //
+    // Insert ainst just before next_ainst.
+    //
+    virtual void InstInsert(IFEEDER_STREAM_HANDLE stream, ASIM_INST ainst, ASIM_INST next_ainst) { ASSERTX(0); };
+    //
+    // Remove ainst completely.  No longer needed.
+    //
+    virtual void InstRemove(IFEEDER_STREAM_HANDLE stream, ASIM_INST ainst, ASIM_INST next_ainst) { ASSERTX(0); };
+    //
+    // Inform feeder that the ainst has been modified, recalcute dependencies, etc.
+    //
+    virtual void InstModify(IFEEDER_STREAM_HANDLE stream, ASIM_INST ainst) { ASSERTX(0); };
+
+    //
+    // Inform simulator that 'inst' is being renamed.
+    //
+    virtual void Rename(ASIM_INST inst) {};
+
     //
     // Inform simulator that 'inst' is being issued.
     //
@@ -415,7 +524,7 @@ class IFEEDER_BASE_CLASS : public TRACEABLE_CLASS
     virtual void
     Marker(ASIM_MARKER_CMD cmd,
            IFEEDER_STREAM_HANDLE stream,
-           UINT32 markerID, 
+           UINT32 markerID,
            IADDR_CLASS markerPC = IADDR_CLASS(0, 0),
            UINT32 instBits = 0,
            UINT32 instMask = 0)
@@ -445,14 +554,14 @@ class IFEEDER_BASE_CLASS : public TRACEABLE_CLASS
     //
     // Translates a virtual PC to a physical PC.  Provided by base class
     // and calls the virtual ITranslate without IADDR_CLASS.
-    // 
+    //
 
     //
     // Translates a virtual PC to a physical PC for Istream.  This is the only
     // form callable from outside the feeder itself.  The form without
     // the stream handle is no longer part of the interface, but is supported
     // for older feeders.
-    // 
+    //
     virtual bool ITranslate(IFEEDER_STREAM_HANDLE stream,
                             UINT32 hwcNum,
                             UINT64 va,
@@ -498,7 +607,7 @@ class IFEEDER_BASE_CLASS : public TRACEABLE_CLASS
     //        responsibility of the callee to choose a reasonable, feeder
     //        specific, policy for handling the case that the instruction's
     //        virtual effective address doesn't match va.
-    // 
+    //
     virtual bool DTranslate(ASIM_INST inst,
                             UINT64 va,
                             UINT64& pa) = 0;
@@ -521,7 +630,7 @@ class IFEEDER_BASE_CLASS : public TRACEABLE_CLASS
    // this function just adds the twolit offset to PA and returns it back and hence it is called PTranslate since it is P to P translation.
 // This is need for page walks were the multiple memlookups are all physical addresses and need to be twolit offset (with respect to different threads).
     virtual bool PTranslate(ASIM_INST inst,
-                            UINT64* pa) 
+                            UINT64* pa)
     {
        //ASIMERROR("Feeder didn't supply an PTranslate routine");
        return true;
@@ -567,7 +676,7 @@ class IFEEDER_BASE_CLASS : public TRACEABLE_CLASS
     };
 
     virtual bool GetArchRegisterValue(
-        IFEEDER_STREAM_HANDLE stream, 
+        IFEEDER_STREAM_HANDLE stream,
         ARCH_REGISTER_TYPE rType,
         INT32 regNum,
         ARCH_REGISTER reg)
@@ -575,7 +684,7 @@ class IFEEDER_BASE_CLASS : public TRACEABLE_CLASS
         ASSERTX(! IsCapable(IFEED_REGISTER_VALUES));
         return false;
     };
- 
+
 
     virtual bool GetOutputRegisterValue(
         ASIM_INST inst,
@@ -695,6 +804,20 @@ class IFEEDER_BASE_CLASS : public TRACEABLE_CLASS
     }
 
     //----------------------------------------------------------------
+    // I/O port value write -- set IFEED_MEMORY_VALUES
+    //----------------------------------------------------------------
+
+    virtual bool WriteIOPort(
+        ASIM_INST inst,
+        void *buffer,
+        UINT32 size,
+        UINT32 port)
+    {
+        ASSERTX(! IsCapable(IFEED_MEMORY_VALUES));
+        return false;
+    }
+
+    //----------------------------------------------------------------
     // System Activity Queries
     //----------------------------------------------------------------
 
@@ -772,12 +895,19 @@ class IFEEDER_BASE_CLASS : public TRACEABLE_CLASS
     //      (which allows other threads to see the stored value).
     //
     // Requires: instruction 'inst' must be a load instruction which has
-    // already been issued, but not killed and for which the read has not 
+    // already been issued, but not killed and for which the read has not
     // yet been done. (Note that the instruction may already have committed!)
     // This must be called for every fetched read instruction that is not
     // killed.
     //
     virtual bool DoRead(ASIM_INST inst)
+    {
+        ASSERTX(! IsCapable(IFEED_MEM_CTL));
+        return true;
+    }
+
+    // pte_fix_hkim6
+    virtual bool CheckFault(ASIM_INST inst)
     {
         ASSERTX(! IsCapable(IFEED_MEM_CTL));
         return true;
@@ -793,6 +923,13 @@ class IFEEDER_BASE_CLASS : public TRACEABLE_CLASS
     {
         ASSERTX(! IsCapable(IFEED_MEM_CTL));
         return true;
+    }
+
+    // Used to check if an address is LOCKED
+    virtual bool IsMemLocked(ASIM_INST inst)
+    {
+       ASSERTX(! IsCapable(IFEED_MEM_LOCK));
+       return false;
     }
 
     //
@@ -812,7 +949,7 @@ class IFEEDER_BASE_CLASS : public TRACEABLE_CLASS
     // Clear the stats for the feeder
     //
     virtual void ClearStats() {}
-        
+
     //----------------------------------------------------------------
     // Feeder management
     //----------------------------------------------------------------
@@ -840,7 +977,7 @@ class IFEEDER_BASE_CLASS : public TRACEABLE_CLASS
         ASSERTX(! IsCapable(IFEED_DUMP_FUNCTIONAL_STATE));
         return false;
     }
-    
+
     //load a check point of the state
     virtual bool LoadState(const char * file_name, FUNCTIONAL_MODEL_DUMP_TYPE type)
     {
@@ -905,7 +1042,7 @@ class IFEEDER_THREAD_CLASS : public TRACEABLE_CLASS
     const IFEEDER_BASE feeder;
 };
 
-        
+
 //
 // Call this to get a specific feeder.  Must be defined by the module that
 // provides the feeder.
@@ -918,6 +1055,325 @@ IFEEDER_BASE IFEEDER_New(void);
 void IFEEDER_Usage(FILE *file);
 
 
+
+//----------------------------------------------------------------
+// Multithreading support
+//----------------------------------------------------------------
+
+#if MAX_PTHREADS > 1
+
+//
+// This is an instrution feeder proxy
+// that has the same interface as IFEEDER_BASE_CLASS,
+// but sequentializes all feeder accesses inside a critical section.
+//
+// We need to use a proxy object, rather than inheritance, to avoid
+// the problem of API functions calling other API functions and deadlocking
+// while trying to recursively enter the critical section.
+//
+// See Gamma, Helm, Johnson & Vlissides, "Proxy" and "Decorator" patterns.
+//
+typedef class IFEEDER_THREADSAFE_CLASS *IFEEDER_THREADSAFE;
+
+class IFEEDER_THREADSAFE_CLASS : public IFEEDER_BASE_CLASS
+{
+  private:
+    IFEEDER_BASE     feeder;          // points to the actual feeder we are proxy-ing
+    pthread_mutex_t  feeder_mutex;    // a lock to sequentialize all feeder calls
+
+    // shorthand for entering and leaving the critical section
+    void enter()
+    {
+        pthread_mutex_lock  ( &feeder_mutex );
+    };
+
+    void leave()
+    {
+        pthread_mutex_unlock( &feeder_mutex );
+    };
+
+// a macro to define methods which call the base class method inside a mutex
+#define PROXY_FEEDER_METHOD( __name__ , __formals__ , __actuals__ ) \
+    void __name__ __formals__ \
+    { \
+        enter(); \
+	feeder -> __name__ __actuals__ ; \
+	leave(); \
+    }
+
+// same as above for methods that return a value
+#define PROXY_FEEDER_FUNCTION( __rettype__ , __name__ , __formals__ , __actuals__ ) \
+    __rettype__ __name__ __formals__ \
+    { \
+        __rettype__ retval; \
+        enter(); \
+	retval = feeder -> __name__ __actuals__ ; \
+	leave(); \
+	return retval; \
+    }
+
+
+  public:
+    //
+    // construct a threadsafe proxied feeder
+    // from a feeder that was previously instantiated.
+    //
+    IFEEDER_THREADSAFE_CLASS(
+        IFEEDER_BASE fdr
+    )
+      : IFEEDER_BASE_CLASS(
+            "threadsafe_proxy",     // name of feeder
+	    NULL,                   // parent feeder
+	    fdr->GetFeederType()    // get type from the one we're proxy-ing
+	),
+	feeder( fdr )
+    {
+        feeder->SetParentFeeder( this );  // we are the parent of the proxied feeder
+    };
+
+    //
+    // THESE WERE NOT VIRTUAL IN THE BASE CLASS !!!
+    //
+    PROXY_FEEDER_FUNCTION( bool,              IsCapable,      (CAPABILITIES feature), (feature) );
+    PROXY_FEEDER_FUNCTION( MACRO_FEEDER_TYPE, GetMacroType,   (),                     ()        );
+    PROXY_FEEDER_FUNCTION( UINT32,            NActiveThreads, (),                     ()        );
+
+    //
+    // API functions we proxy:
+    //
+    PROXY_FEEDER_FUNCTION( bool,   Init,
+                                   (UINT32 argc, char **argv, char **envp),
+                                   (       argc,        argv,        envp)
+    );
+    PROXY_FEEDER_METHOD(           Done,
+                                   (void),
+                                   (    )
+    );
+    PROXY_FEEDER_METHOD(           ForceThreadExit,
+                                   (IFEEDER_STREAM_HANDLE stream),
+                                   (                      stream)
+    );
+    PROXY_FEEDER_METHOD(           SynchronizeFeederState,
+                                   (void * state),
+                                   (       state)
+    );
+    PROXY_FEEDER_METHOD(           WarmUpClientInfo,
+                                   (const WARMUP_CLIENTS clientInfo),
+                                   (                     clientInfo)
+    );
+    PROXY_FEEDER_FUNCTION( bool,   WarmUp,
+                                   (IFEEDER_STREAM_HANDLE stream, WARMUP_INFO warmup),
+                                   (                      stream,             warmup)
+    );
+    PROXY_FEEDER_FUNCTION( bool,   Fetch,
+                                   (IFEEDER_STREAM_HANDLE stream, IADDR_CLASS pc, ASIM_INST inst, UINT64 cycle),
+			                       (                      stream,             pc,           inst,        cycle)
+    );
+    PROXY_FEEDER_FUNCTION( bool,   FetchMacro,
+                                   (IFEEDER_STREAM_HANDLE stream, IADDR_CLASS pc, ASIM_MACRO_INST inst, UINT64 cycle),
+				                   (                      stream,             pc,                 inst,        cycle)
+    );
+    PROXY_FEEDER_FUNCTION( bool,   FetchMicro,
+                                   (IFEEDER_STREAM_HANDLE stream,
+				                   IADDR_CLASS            pc,
+                                   ASIM_MACRO_INST        macroInst,
+					               ASIM_INST              inst,
+						           UINT64                 cycle),
+                                   (                      stream, pc, macroInst, inst, cycle)
+    );
+    PROXY_FEEDER_FUNCTION( bool,   FetchMicro,
+                                   (IFEEDER_STREAM_HANDLE stream,
+                                   IADDR_CLASS            pc,
+                                   ASIM_MACRO_INST        macroInst,
+                                   ASIM_INST              inst,
+                                   UINT64                 cycle,
+                                   bool                   do_rename),
+                                   (                      stream, pc, macroInst, inst, cycle, do_rename)
+    );
+    PROXY_FEEDER_FUNCTION( UINT64, GetFirstPC,
+                                   (IFEEDER_STREAM_HANDLE stream),
+                                   (                      stream)
+    );
+    PROXY_FEEDER_METHOD(           InstInsert,
+                                   (IFEEDER_STREAM_HANDLE stream, ASIM_INST ainst, ASIM_INST next_ainst),
+                                   (                      stream,           ainst,           next_ainst)
+    );
+    PROXY_FEEDER_METHOD(           InstRemove,
+                                   (IFEEDER_STREAM_HANDLE stream, ASIM_INST ainst, ASIM_INST next_ainst),
+                                   (                      stream,           ainst,           next_ainst)
+    );
+    PROXY_FEEDER_METHOD(           InstModify,
+                                   (IFEEDER_STREAM_HANDLE stream, ASIM_INST ainst),
+                                   (                      stream,           ainst)
+    );
+    PROXY_FEEDER_METHOD(           Rename,
+                                   (ASIM_INST inst),
+                                   (          inst)
+    );
+    PROXY_FEEDER_METHOD(           Issue,
+                                   (ASIM_INST inst),
+                                   (          inst)
+    );
+    PROXY_FEEDER_METHOD(           Execute,
+                                   (ASIM_INST inst),
+				                   (          inst)
+    );
+    PROXY_FEEDER_METHOD(           Commit,
+                                   (ASIM_INST inst),
+				                   (          inst)
+    );
+    PROXY_FEEDER_METHOD(           Kill,
+                                   (ASIM_INST inst, bool fetchNext, bool killMe),
+				                   (          inst,      fetchNext,      killMe)
+    );
+    PROXY_FEEDER_METHOD(           Marker,
+                                   (ASIM_MARKER_CMD      cmd,
+                                   IFEEDER_STREAM_HANDLE stream,
+                                   UINT32                markerID,
+                                   IADDR_CLASS           markerPC,
+                                   UINT32                instBits,
+                                   UINT32                instMask),
+                                   (                     cmd, stream, markerID, markerPC, instBits, instMask)
+    );
+    PROXY_FEEDER_FUNCTION( UINT64, Skip,
+                                   (IFEEDER_STREAM_HANDLE stream, UINT64 n, INT32 markerID),
+				                   (                      stream,        n,       markerID)
+    );
+    PROXY_FEEDER_FUNCTION( bool,   ITranslate,
+                                   (IFEEDER_STREAM_HANDLE stream, UINT32 hwcNum, UINT64 va, UINT64& pa),
+				                   (                      stream,        hwcNum,        va,         pa)
+    );
+    PROXY_FEEDER_FUNCTION( bool,   ITranslate,
+                                   (IFEEDER_STREAM_HANDLE                stream,
+				                   const MEMORY_VIRTUAL_REFERENCE_CLASS& vRegion,
+                                   UINT64&                               pa,
+                                   PAGE_TABLE_INFO                       pt_info,
+                                   MEMORY_VIRTUAL_REFERENCE_CLASS&       vNextRegion),
+                                   (                                     stream, vRegion, pa, pt_info, vNextRegion)
+    );
+    PROXY_FEEDER_FUNCTION( bool,   DTranslate,
+                                   (ASIM_INST inst, UINT64 va, UINT64& pa),
+				                   (          inst,        va,         pa)
+    );
+    PROXY_FEEDER_FUNCTION( bool,   DTranslate,
+                                   (ASIM_INST                            inst,
+                                   const MEMORY_VIRTUAL_REFERENCE_CLASS& vRegion,
+                                   UINT64&                               pa,
+                                   PAGE_TABLE_INFO                       pt_info,
+                                   MEMORY_VIRTUAL_REFERENCE_CLASS&       vNextRegion),
+                                   (                                     inst, vRegion, pa, pt_info, vNextRegion)
+    );
+    PROXY_FEEDER_FUNCTION( bool,   PTranslate,
+                                   (ASIM_INST inst, UINT64* pa),
+				                   (          inst,         pa)
+    );
+    PROXY_FEEDER_FUNCTION( CPU_MODE_TYPE,
+                                   GetCurrentCPUMode,
+                                   (void),
+				                   (    )
+    );
+    PROXY_FEEDER_FUNCTION( bool,   GetInputRegisterValue,
+                                   (ASIM_INST inst, ARCH_REGISTER_TYPE rType, INT32 regNum, ARCH_REGISTER reg),
+				                   (          inst,                    rType,       regNum,               reg)
+    );
+    PROXY_FEEDER_FUNCTION( bool,   GetArchRegisterValue,
+                                   (IFEEDER_STREAM_HANDLE stream, ARCH_REGISTER_TYPE rType, INT32 regNum, ARCH_REGISTER reg),
+			                	   (                      stream,                    rType,       regNum,               reg)
+    );
+    PROXY_FEEDER_FUNCTION( bool,   GetOutputRegisterValue,
+                                   (ASIM_INST inst, ARCH_REGISTER_TYPE rType, INT32 regNum, ARCH_REGISTER reg),
+				                   (          inst,                    rType,       regNum,               reg)
+    );
+    PROXY_FEEDER_FUNCTION( bool,   GetInputRegVal,
+                                   (ASIM_INST inst, UINT32 slot, ARCH_REGISTER reg),
+				                   (          inst,        slot,               reg)
+    );
+    PROXY_FEEDER_FUNCTION( bool,   GetPredicateRegVal,
+                                   (ASIM_INST inst, UINT32 slot, ARCH_REGISTER reg),
+				                   (          inst,        slot,               reg)
+    );
+    PROXY_FEEDER_FUNCTION( bool,   GetOutputRegVal,
+                                   (ASIM_INST inst, UINT32 slot, ARCH_REGISTER reg),
+				                   (          inst,        slot,               reg)
+    );
+    PROXY_FEEDER_FUNCTION( bool,   ReadMemory,
+                                   (ASIM_INST inst, void *buffer, UINT32 size, UINT64 pAddr),
+				                   (          inst,       buffer,        size,        pAddr)
+    );
+    PROXY_FEEDER_FUNCTION( bool,   ReadMemory,
+                                   (IFEEDER_STREAM_HANDLE stream, void *buffer, UINT32 size, UINT64 pAddr),
+				                   (                      stream,       buffer,        size,        pAddr)
+    );
+    PROXY_FEEDER_FUNCTION( bool,   ReadIOPort,
+                                   (ASIM_INST inst, void *buffer, UINT32 size, UINT32 port),
+				                   (          inst,       buffer,        size,        port)
+    );
+    PROXY_FEEDER_FUNCTION( FEEDER_SYSTEM_EVENT_CLASS,
+                                   HandleSystemEvent,
+                                   (ASIM_INST inst, FEEDER_SYSTEM_EVENT_TYPES type),
+                                   (          inst,                           type)
+    );
+    PROXY_FEEDER_FUNCTION( FEEDER_SYSTEM_EVENT_TYPES,
+                                   GetNextSystemEventType,
+                                   (ASIM_INST inst),
+                                   (          inst)
+    );
+    PROXY_FEEDER_FUNCTION( bool,   IsSystemEventTypePending,
+                                   (ASIM_INST inst, FEEDER_SYSTEM_EVENT_TYPES type),
+                                   (          inst,                           type)
+    );
+    PROXY_FEEDER_FUNCTION( UINT64, Symbol,
+                                   (IFEEDER_STREAM_HANDLE stream, char* name),
+                                   (                      stream,       name)
+    );
+    PROXY_FEEDER_FUNCTION( UINT64, Symbol,
+                                   (char *name),
+                                   (      name)
+    );
+    PROXY_FEEDER_FUNCTION( char *, Symbol_Name,
+                                   (IFEEDER_STREAM_HANDLE stream, UINT64 address, UINT64& offset),
+                                   (                      stream,        address,         offset)
+    );
+    PROXY_FEEDER_METHOD(           SetEA,
+                                   (ASIM_INST inst, char vf, UINT64 vea),
+                                   (          inst,      vf,        vea)
+    );
+    PROXY_FEEDER_FUNCTION( bool,   DoRead,
+                                   (ASIM_INST inst),
+                                   (          inst)
+    );
+    // pte_fix_hkim6
+    PROXY_FEEDER_FUNCTION( bool,   CheckFault,
+                                   (ASIM_INST inst),
+                                   (          inst)
+    );
+    PROXY_FEEDER_FUNCTION( bool,   DoSpecWrite,
+                                   (ASIM_INST inst),
+                                   (          inst)
+    );
+    PROXY_FEEDER_FUNCTION( bool,   DoWrite,
+                                   (ASIM_INST inst),
+                                   (          inst)
+    );
+    PROXY_FEEDER_METHOD(           StcFailed,
+                                   (ASIM_INST inst),
+                                   (          inst)
+    );
+    PROXY_FEEDER_METHOD(           DumpStats,
+                                   (STATE_OUT state_out),
+                                   (          state_out)
+    );
+    PROXY_FEEDER_METHOD(           ClearStats,
+                                   (),
+                                   ()
+    );
+    PROXY_FEEDER_FUNCTION( bool,   DumpState,
+                                   (const char * file_name, FUNCTIONAL_MODEL_DUMP_TYPE type),
+                                   (             file_name,                            type)
+    );
+};
+
+#endif // MAX_PTHREADS > 1
 
 
 #endif /* _INSTFEEDERBASE_ */

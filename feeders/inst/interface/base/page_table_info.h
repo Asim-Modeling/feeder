@@ -42,6 +42,7 @@ class PAGE_TABLE_INFO_CLASS
     UINT32 entrySize;
     UINT64 pde_data;
     UINT64 pte_data;
+    UINT32 pageMode;
 
   public:
     // Constructor
@@ -89,6 +90,10 @@ class PAGE_TABLE_INFO_CLASS
     void SetPteData(UINT64 ptedata);
     UINT64 GetPteData() const;
 
+    // ISA-specific mode, also specific to a reference model (ie. archlib)
+    // these modes start at 0 and -1 is invalid.
+    void SetPageMode(UINT32 mode);
+    UINT32 GetPageMode() const;
 
 };
 

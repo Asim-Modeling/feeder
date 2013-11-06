@@ -19,12 +19,13 @@
 
 /**
  * @file
- * @author Chris Weaver 
- * @brief Simple class for describing system events 
+ * @author Chris Weaver
+ * @brief Simple class for describing system events
  */
 #ifndef _FEEDERSYSTEMEVENT_
 #define _FEEDERSYSTEMEVENT_
-
+#include <string>
+#include "asim/syntax.h"
 
 enum FEEDER_SYSTEM_EVENT_TYPES
 {
@@ -33,79 +34,115 @@ enum FEEDER_SYSTEM_EVENT_TYPES
     IO_FEEDER_SYSTEM_EVENT,
     IRQ_FEEDER_SYSTEM_EVENT,
     MSR_FEEDER_SYSTEM_EVENT,
+    REG_FEEDER_SYSTEM_EVENT,
     SYSTEM_EVENT_LAST                       // MUST BE LAST!!!
 };
 
 class FEEDER_SYSTEM_EVENT_CLASS
 {
-  private:
-    FEEDER_SYSTEM_EVENT_TYPES type;
+private:
+    FEEDER_SYSTEM_EVENT_TYPES  type;
 
-    //for DMA and IO
-    UINT64 address;
-    UINT64 size;
+    // For DMA and IO
+    UINT64                     address;
+    UINT64                     size;
 
-    //for interrupts
-    IADDR_CLASS irq_pc;
+    // For interrupts
+    IADDR_CLASS                irq_pc;
 
-  public:
-    //null constructor
-    FEEDER_SYSTEM_EVENT_CLASS()
+    // For register injection
+    std::string                regName;
+    UINT64                     regVal;
+
+public:
+    // Null constructor
+    FEEDER_SYSTEM_EVENT_CLASS() :
+        type( NULL_FEEDER_SYSTEM_EVENT )
     {
-        this->type=NULL_FEEDER_SYSTEM_EVENT;
     }
 
-    ~FEEDER_SYSTEM_EVENT_CLASS() {}
-    //constructor for DMA and IO
-    FEEDER_SYSTEM_EVENT_CLASS(FEEDER_SYSTEM_EVENT_TYPES type, UINT64 address, UINT64 size)
+    FEEDER_SYSTEM_EVENT_CLASS( FEEDER_SYSTEM_EVENT_TYPES type ) :
+        type( type )
     {
-        this->type=type;
-        this->size=size;
-        this->address=address;
     }
 
-    //construction for irq
-    FEEDER_SYSTEM_EVENT_CLASS(FEEDER_SYSTEM_EVENT_TYPES type, IADDR_CLASS irq_pc)
+    // Constructor for DMA and IO
+    FEEDER_SYSTEM_EVENT_CLASS( FEEDER_SYSTEM_EVENT_TYPES type, UINT64 address, UINT64 size ) :
+        type( type ),
+        address( address ),
+        size( size )
     {
-        this->type=type;
-        this->irq_pc=irq_pc;
     }
 
-    inline UINT64 GetAddress() const;
-    inline UINT64 GetSize() const;
-    inline FEEDER_SYSTEM_EVENT_TYPES GetType() const;
-    inline IADDR_CLASS GetIrqPC() const;
+    // Construction for irq
+    FEEDER_SYSTEM_EVENT_CLASS( FEEDER_SYSTEM_EVENT_TYPES type, IADDR_CLASS irq_pc ) :
+        type( type ),
+        irq_pc( irq_pc )
+    {
+    }
 
+    // Construction for register injection
+    FEEDER_SYSTEM_EVENT_CLASS( FEEDER_SYSTEM_EVENT_TYPES type, std::string regName, UINT64 regVal ) :
+        type( type ),
+        regName( regName ),
+        regVal( regVal )
+    {
+    }
+
+    ~FEEDER_SYSTEM_EVENT_CLASS()
+    {
+    }
+
+    inline UINT64                    GetAddress() const;
+    inline UINT64                    GetSize()    const;
+    inline FEEDER_SYSTEM_EVENT_TYPES GetType()    const;
+    inline IADDR_CLASS               GetIrqPC()   const;
+    inline std::string               GetRegName() const;
+    inline UINT64                    GetRegVal()  const;
 };
 
 
-//accessor for dma and io memory addresses
-inline UINT64 
+// Accessor for dma and io memory addresses
+inline UINT64
 FEEDER_SYSTEM_EVENT_CLASS::GetAddress() const
 {
-    ASSERT((type==DMA_FEEDER_SYSTEM_EVENT || type== IO_FEEDER_SYSTEM_EVENT),"No size for non IO/DMA sys events");
+    ASSERT( (type == DMA_FEEDER_SYSTEM_EVENT || type == IO_FEEDER_SYSTEM_EVENT), "No size for non IO/DMA sys events" );
     return address;
 }
 
-//accessor for dma and io memory size
+// Accessor for dma and io memory size
 inline UINT64
 FEEDER_SYSTEM_EVENT_CLASS::GetSize() const
 {
-    ASSERT((type==DMA_FEEDER_SYSTEM_EVENT || type== IO_FEEDER_SYSTEM_EVENT),"No size for non IO/DMA sys events");
+    ASSERT( (type == DMA_FEEDER_SYSTEM_EVENT || type == IO_FEEDER_SYSTEM_EVENT), "No size for non IO/DMA sys events" );
     return size;
 }
 
-inline FEEDER_SYSTEM_EVENT_TYPES 
+inline FEEDER_SYSTEM_EVENT_TYPES
 FEEDER_SYSTEM_EVENT_CLASS::GetType() const
 {
     return type;
 }
 
-inline IADDR_CLASS 
+inline IADDR_CLASS
 FEEDER_SYSTEM_EVENT_CLASS::GetIrqPC() const
 {
-    ASSERT((type==IRQ_FEEDER_SYSTEM_EVENT), "IrqPc only availabe for interrupts");
+    ASSERT( (type == IRQ_FEEDER_SYSTEM_EVENT), "IrqPc only available for interrupts" );
     return irq_pc;
 }
 
-#endif
+inline std::string
+FEEDER_SYSTEM_EVENT_CLASS::GetRegName() const
+{
+    ASSERT( (type == REG_FEEDER_SYSTEM_EVENT), "RegName only available for reg injections" );
+    return regName;
+}
+
+inline UINT64
+FEEDER_SYSTEM_EVENT_CLASS::GetRegVal() const
+{
+    ASSERT( (type == REG_FEEDER_SYSTEM_EVENT), "RegVal only available for reg injections" );
+    return regVal;
+}
+
+#endif // ifndef _FEEDERSYSTEMEVENT_

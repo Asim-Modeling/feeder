@@ -702,6 +702,26 @@ CONTEXT_SCHEDULER_CLASS::Clock(UINT64 cycle)
 
     currentCycle = cycle;
     
+    //carlosvi: Hook here for a Clock to feeder
+    // One call is enough since we check all threads
+    hwc = HWContextList[0];
+    // Ignore empty slots in the list   
+    if (hwc != ASIM_HWC_NONE)
+    {
+        // If hwc isn't running anything, no need to reschedule
+        if (hwc->GetSWC() != ASIM_SWC_NONE)
+        {
+            if (hwc->GetSWC()->GetIFeeder()!=NULL)
+
+            {
+                // This is called primarily for cooperative workloads in case special handling is 
+                // is required for synchronization          
+                hwc->GetSWC()->GetIFeeder()->Clock(cycle);
+            }
+        }
+    }
+
+
 /*
 // 10/21/2002: Removing this entire sequence. It was designed for Mingo.
 // Later, we may support EndOfData in all feeders to determine
@@ -892,8 +912,11 @@ CONTEXT_SCHEDULER_CLASS::StartDeschedule(SW_CONTEXT swc)
 void
 CONTEXT_SCHEDULER_CLASS::RemoveSoftwareContext (SW_CONTEXT swc)
 {
-    // T1("remove swc called by tid: " << get_asim_thread_id());
-    //    swc->DumpID();
+    
+
+    T1("remove swc called by tid: " << ASIM_SMP_CLASS::GetRunningThreadNumber());
+
+//    swc->DumpID();
 
     for (UINT32 i=0; i< MAX_NUM_SWCS; i++)
     {

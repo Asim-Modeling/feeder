@@ -53,6 +53,7 @@ PAGE_TABLE_INFO_CLASS::Init()
     entrySize = 0;
     pde_data = 0;
     pte_data = 0;
+    pageMode = -1U;  // invalid mode to start
 }
 
 void
@@ -172,4 +173,17 @@ UINT64
 PAGE_TABLE_INFO_CLASS::GetPteData() const
 {
     return pte_data;
+}
+
+void
+PAGE_TABLE_INFO_CLASS::SetPageMode(UINT32 mode) 
+{
+    pageMode = mode;
+}
+
+
+UINT32
+PAGE_TABLE_INFO_CLASS::GetPageMode() const
+{
+    return pageMode;
 }

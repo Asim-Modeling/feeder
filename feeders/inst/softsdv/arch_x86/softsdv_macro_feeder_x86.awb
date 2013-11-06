@@ -37,4 +37,11 @@
 
 %param %dynamic SOFTSDV_MONITOR_DMA_TRAFFIC 1 "Enable DMA system events."
 
+/*
+ * added for differentiating feeders in the timing models.  this is a hack
+ * which needs to be removed when all the LIT/SoftSDV interface differences
+ * are ironed out.
+ */
+%export %param FEEDER_IS_SOFTSDV 1 "feeder is a SoftSDV-based feeder"
+
 %AWB_END

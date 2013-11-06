@@ -144,6 +144,24 @@ class SW_CONTEXT_CLASS : ASIM_REGISTRY_CLASS, public TRACEABLE_CLASS
                             ///<  the first fetch for this SWC or not and
                             ///<  is used to steer the feeder to the right ip
 
+    bool cs_done;           // records when the context switch is over, and then used to 
+                            // initiate state transition to the CONTEXT_SWITCH_NONE
+                            // state in the next cycle
+
+    //okhan_cs: control bits for context switch tranitioning
+    bool running_cs;
+    bool cs_in_progress;
+
+    bool firstInstructionFetched; // have we fetched the first instruction for this SWC?
+
+    UINT32 swapCount; 		// mdpowel1: number of times this CS has been swapped off a defective core
+    
+ public:
+    UINT64 nMicroCommitted; 	// number of micro instructions committed by this thread
+    UINT64 nMacroCommitted; 	// number of macro instructions committed by this thread
+
+    UINT64 runningHWCId;	// id of the hardware context i am running on
+    
   private:
     //
     // Fetch, Issue, Commit and Kill are private because they are to be
@@ -154,16 +172,40 @@ class SW_CONTEXT_CLASS : ASIM_REGISTRY_CLASS, public TRACEABLE_CLASS
 
     
     ASIM_MACRO_INST FetchMacro(UINT64 cycle, IADDR_CLASS ip);
-    ASIM_INST FetchMicro(UINT64 cycle,ASIM_MACRO_INST macro, IADDR_CLASS ip);
+    ASIM_INST FetchMicro(UINT64 cycle,ASIM_MACRO_INST macro, IADDR_CLASS ip, bool do_rename=true);
+    
 
-
+    inline void Rename(ASIM_INST ainst);
     inline void Issue(ASIM_INST ainst);
     inline void Execute(ASIM_INST ainst);
     void Commit(ASIM_INST ainst);
     inline void Kill(ASIM_INST ainst, bool fetchNext, bool killMe);
     inline bool DoRead(ASIM_INST ainst);
+    inline bool CheckFault(ASIM_INST ainst);    // pte_fix_hkim6
     inline bool DoSpecWrite(ASIM_INST ainst);
     inline bool DoWrite(ASIM_INST ainst);
+
+
+  public:
+    // These added to support the insertion/removal/alteration of instructions
+    // directed from outside of the feeder.  The primary example are those 
+    // instruction mutations directly by the timing model.  These instructions 
+    // can be registered in the feeder so that they can be executed, committed, 
+    // etc.  The caveat is that they should be manipulated before this or younger 
+    // instructions have done Issue().   --slechta
+    //
+    // Insert ainst just before next_ainst.
+    //
+    inline void InstInsert(ASIM_INST ainst, ASIM_INST next_ainst);
+    //
+    // Remove ainst completely.  No longer needed.
+    //
+    inline void InstRemove(ASIM_INST ainst, ASIM_INST next_ainst);
+    //
+    // Inform feeder that the ainst has been modified, recalcute dependencies, etc.
+    //
+    inline void InstModify(ASIM_INST ainst);
+
     
     void WarmUpClientInfo(const WARMUP_CLIENTS clientInfo);
     bool WarmUp(WARMUP_INFO warmup);
@@ -214,6 +256,7 @@ class SW_CONTEXT_CLASS : ASIM_REGISTRY_CLASS, public TRACEABLE_CLASS
     bool GetRunnable (void) const;
     bool GetDeschedulePending (void) const;
     bool GetDeletePending (void) const;
+    bool GetFirstInstructionFetched (void) const;
       
     static UINT32 NActiveContexts(void) { return uniqueStaticID; };
 
@@ -229,6 +272,8 @@ class SW_CONTEXT_CLASS : ASIM_REGISTRY_CLASS, public TRACEABLE_CLASS
     void SetDeschedulePending (void);
     void SetNotDeschedulePending (void);
     void SetDeletePending (void);
+    void SetFirstInstructionFetched (void);
+    void SetNotFirstInstructionFetched (void);
 
     void HandleEndThread();         // not used right now
 
@@ -287,6 +332,13 @@ class SW_CONTEXT_CLASS : ASIM_REGISTRY_CLASS, public TRACEABLE_CLASS
     void DumpStats(STATE_OUT stateOut);
 
 
+    // mdpowel1: for tracking how often swc is swapped from (booted from) a core
+    // due to defects
+
+    void SetSwapCount(UINT32 i) { swapCount = i; };
+    UINT32 GetSwapCount(void) {return swapCount; };
+    UINT32 IncSwapCount(void) { swapCount++; return swapCount; };
+
 }; //SW_CONTEXT_CLASS
 /***********************************************************************************
  *
@@ -317,6 +369,17 @@ SW_CONTEXT_CLASS::DoRead(
     ASIM_INST ainst)
 {
     return iFeeder->DoRead(ainst);
+}
+
+// pte_fix_hkim6
+/**
+ * check fault
+ */
+inline bool
+SW_CONTEXT_CLASS::CheckFault(
+    ASIM_INST ainst)
+{
+    return iFeeder->CheckFault(ainst);
 }
 
 /**
@@ -395,6 +458,18 @@ SW_CONTEXT_CLASS::Issue(
 {
     iFeeder->Issue(ainst);
 }
+
+/**
+ * Issue an instruction for this software context.
+
+ */
+void
+SW_CONTEXT_CLASS::Rename(
+    ASIM_INST ainst)
+{
+    iFeeder->Rename(ainst);
+}
+
 /**
  * Execute an instruction for this software context.
  */
@@ -419,5 +494,36 @@ SW_CONTEXT_CLASS::Kill(
     iFeeder->Kill(ainst, fetchNext, killMe);
 }
 
+//
+// Insert ainst just before next_ainst.
+//
+inline void 
+SW_CONTEXT_CLASS::InstInsert(
+    ASIM_INST ainst, 
+    ASIM_INST next_ainst)
+{
+    iFeeder->InstInsert(feederStreamHandle, ainst, next_ainst);
+}
+
+//
+// Remove ainst completely.  No longer needed.
+//
+inline void 
+SW_CONTEXT_CLASS::InstRemove(
+    ASIM_INST ainst, 
+    ASIM_INST next_ainst)
+{
+    iFeeder->InstRemove(feederStreamHandle, ainst, next_ainst);
+}
+
+//
+// Inform feeder that the ainst has been modified, recalcute dependencies, etc.
+//
+inline void 
+SW_CONTEXT_CLASS::InstModify(
+    ASIM_INST ainst)
+{
+    iFeeder->InstModify(feederStreamHandle, ainst);
+}
 
 #endif /* _SW_CONTEXT_CLASS_ */
